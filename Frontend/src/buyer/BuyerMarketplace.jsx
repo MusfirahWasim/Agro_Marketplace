@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, Sprout, Plus, Minus, ShoppingCart, X } from "lucide-react";
+import { CATEGORIES, CONSIGNMENTS } from "../data/consignments";
 
 const COLORS = {
   forest: "#1e4620",
@@ -14,20 +16,8 @@ const COLORS = {
   border: "#d9ddce",
 };
 
-const CATEGORIES = ["All", "Vegetable", "Leafy green", "Fruit"];
-
-const CONSIGNMENTS = [
-  { consignId: "CN-1042", product: "Tomato (Grade A)", category: "Vegetable", agent: "Rafiq Traders", available: 300, unit: "kg", price: 90 },
-  { consignId: "CN-1041", product: "Onion", category: "Vegetable", agent: "Bilal & Co.", available: 520, unit: "kg", price: 62 },
-  { consignId: "CN-1039", product: "Potato", category: "Vegetable", agent: "Rafiq Traders", available: 110, unit: "kg", price: 48 },
-  { consignId: "CN-1036", product: "Tomato (Grade B)", category: "Vegetable", agent: "Karachi Fresh Agents", available: 300, unit: "kg", price: 70 },
-  { consignId: "CN-1033", product: "Spinach", category: "Leafy green", agent: "Noor Agro Traders", available: 60, unit: "kg", price: 58 },
-  { consignId: "CN-1029", product: "Green chili", category: "Vegetable", agent: "Bilal & Co.", available: 40, unit: "kg", price: 145 },
-  { consignId: "CN-1027", product: "Banana", category: "Fruit", agent: "Karachi Fresh Agents", available: 240, unit: "kg", price: 110 },
-  { consignId: "CN-1024", product: "Mango (Sindhri)", category: "Fruit", agent: "Rafiq Traders", available: 180, unit: "kg", price: 220 },
-];
-
 export default function BuyerMarketplace() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [cart, setCart] = useState({}); // consignId -> qty
@@ -134,7 +124,8 @@ export default function BuyerMarketplace() {
         {filtered.map((c) => (
           <div
             key={c.consignId}
-            className="rounded-xl border p-4 flex flex-col"
+            onClick={() => navigate(`/buyer/product/${c.consignId}`)}
+            className="rounded-xl border p-4 flex flex-col cursor-pointer transition-shadow hover:shadow-md"
             style={{ backgroundColor: "white", borderColor: COLORS.greige }}
           >
             <div
@@ -158,7 +149,7 @@ export default function BuyerMarketplace() {
             </div>
 
             {cart[c.consignId] ? (
-              <div className="flex items-center justify-between mt-auto">
+              <div className="flex items-center justify-between mt-auto" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => decrement(c.consignId)}
                   className="w-8 h-8 rounded-lg border flex items-center justify-center"
@@ -179,7 +170,10 @@ export default function BuyerMarketplace() {
               </div>
             ) : (
               <button
-                onClick={() => addToCart(c.consignId)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addToCart(c.consignId);
+                }}
                 className="mt-auto flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium"
                 style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
               >
@@ -258,6 +252,7 @@ export default function BuyerMarketplace() {
                   </span>
                 </div>
                 <button
+                  onClick={() => navigate("/buyer/checkout", { state: { cartItems, cartTotal } })}
                   className="w-full py-3 rounded-lg text-sm font-medium"
                   style={{ backgroundColor: COLORS.forest, color: "white" }}
                 >

@@ -11,6 +11,8 @@ import AgentDashboard from "./agent/AgentDashboard";
 import AgentOrders from "./agent/AgentOrders";
 
 import BuyerMarketplace from "./buyer/BuyerMarketplace";
+import BuyerProductDetail from "./buyer/BuyerProductDetail";
+import BuyerCheckout from "./buyer/BuyerCheckout";
 import BuyerOrders from "./buyer/BuyerOrders";
 
 export default function App() {
@@ -41,6 +43,8 @@ export default function App() {
         <Route path="/buyer" element={<Layout role="buyer" />}>
           <Route index element={<Navigate to="marketplace" replace />} />
           <Route path="marketplace" element={<BuyerMarketplace />} />
+          <Route path="product/:consignId" element={<BuyerProductDetail />} />
+          <Route path="checkout" element={<BuyerCheckout />} />
           <Route path="orders" element={<BuyerOrders />} />
           <Route path="profile" element={<ProfileSettings role="buyer" />} />
         </Route>
