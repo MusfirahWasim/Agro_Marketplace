@@ -12,6 +12,11 @@ import {
   Bell,
   Menu,
   X,
+  Truck,
+  Boxes,
+  Percent,
+  Landmark,
+  Sparkles,
 } from "lucide-react";
 
 const COLORS = {
@@ -42,8 +47,13 @@ const NAV_CONFIG = {
       { to: "/agent/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/agent/orders", label: "Orders", icon: ClipboardList },
       { to: "/agent/profile", label: "Profile", icon: User },
+      { to: "/agent/inventory", label: "Inventory", icon: Boxes },
+      { to: "/agent/commissions", label: "Commissions", icon: Percent },
+      { to: "/agent/settlements", label: "Settlements", icon: Landmark },
+      { to: "/agent/price-recommendations", label: "Price Insights", icon: Sparkles },
     ],
   },
+  
   buyer: {
     name: "Green Valley Store",
     subtitle: "Buyer",

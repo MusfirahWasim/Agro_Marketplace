@@ -12,6 +12,11 @@ import SupplierReports from "./supplier/SupplierReports";
 
 import AgentDashboard from "./agent/AgentDashboard";
 import AgentOrders from "./agent/AgentOrders";
+import AgentInventory from "./agent/AgentInventory";
+import AgentCommissions from "./agent/AgentCommissions";
+import AgentSettlements from "./agent/AgentSettlements";
+import AgentConsignmentIntake from "./agent/AgentConsignmentIntake";
+import AgentPriceRecommendations from "./agent/AgentPriceRecommendations";
 
 import BuyerMarketplace from "./buyer/BuyerMarketplace";
 import BuyerProductDetail from "./buyer/BuyerProductDetail";
@@ -46,8 +51,13 @@ export default function App() {
         <Route path="/agent" element={<Layout role="agent" />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AgentDashboard />} />
+          <Route path="inventory" element={<AgentInventory />} />
           <Route path="orders" element={<AgentOrders />} />
           <Route path="profile" element={<ProfileSettings role="agent" />} />
+          <Route path="commissions" element={<AgentCommissions />} />
+          <Route path="settlements" element={<AgentSettlements />} />
+          <Route path="consignment-intake" element={<AgentConsignmentIntake />} />
+          <Route path="price-recommendations" element={<AgentPriceRecommendations />} />
         </Route>
 
         {/* Buyer area */}
