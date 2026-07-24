@@ -2,6 +2,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import declarative_base
 from app.core.config import settings
 
+DATABSE_URL = "mysql+aiomysql://root:yourpassword@localhost:3306/agro_marketplace"
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,

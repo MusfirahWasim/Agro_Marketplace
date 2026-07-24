@@ -1,19 +1,39 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from sqlalchemy import text
 from app.core.config import settings
-from app.core.database import engine, Base
-from app.routers import (
-    auth, users, providers, bookings,
-    reviews, chat, categories, wallet,ai
-)
-from app.routers import admin as admin_router 
+from app.core.database import engine
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Verify the database is reachable
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+        print("Database connection OK")
+
+        # List all tables
+        result = await conn.execute(text("SHOW TABLES"))
+        tables = result.fetchall()
+
+        print("\nTables in database:")
+        if tables:
+            for table in tables:
+                print(f" - {table[0]}")
+        else:
+            print("No tables found.")
+
+    try:
+        yield
+    finally:
+        await engine.dispose()
 
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -24,17 +44,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
-app.include_router(users.router, prefix="/api/users", tags=["Users"])
-app.include_router(providers.router, prefix="/api/providers", tags=["Providers"])
-app.include_router(bookings.router, prefix="/api/bookings", tags=["Bookings"])
-app.include_router(reviews.router, prefix="/api/reviews", tags=["Reviews"])
-app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
-app.include_router(categories.router, prefix="/api/categories", tags=["Categories"])
-app.include_router(wallet.router, prefix="/api/wallet", tags=["Wallet"])
-app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
-app.include_router(admin_router.router, prefix="/api/admin", tags=["Admin"])
+# No routers included yet — add each one back in as it's built,
+# e.g. app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 
 @app.get("/health")
 async def health():
