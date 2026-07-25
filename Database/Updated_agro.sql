@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS supplier_agent_consignment (
 
     quantity_consigned     INT UNSIGNED NOT NULL,
     selling_price_per_unit DECIMAL(10,2) NOT NULL,
+    commission_rate        DECIMAL(5,2),      -- agent-set at intake; NULL = use platform default rate
     quantity_sold          INT UNSIGNED NOT NULL DEFAULT 0,
     quantity_remaining     INT UNSIGNED NOT NULL,
 
