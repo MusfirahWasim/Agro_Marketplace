@@ -12,6 +12,8 @@ import {
   ArrowUpCircle,
   Download,
 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import { localizeTrader } from "../i18n/dataLocale";
 
 /**
  * SupplierPayments
@@ -22,6 +24,8 @@ import {
  * Matches the Modern Organic & Eco-Friendly theme:
  * - Off-white page background, forest-green accents, gold highlights
  * - Stat cards, searchable/filterable table, debit/credit ledger styling
+ * Fully localized (English / Urdu) via LanguageContext, including agent
+ * company names, currency label, and dates.
  */
 
 // TODO: replace with real data from GET /suppliers/:id/payments
@@ -89,24 +93,22 @@ const STATUS_STYLES = {
   failed: "bg-red-50 text-red-600 border-red-200",
 };
 
-const STATUS_LABEL = {
-  completed: "Completed",
-  pending: "Pending",
-  failed: "Failed",
+const TYPE_KEY = {
+  settlement: "settlement",
+  partial_settlement: "partialSettlement",
+  refund: "refund",
 };
 
-const TYPE_LABEL = {
-  settlement: "Full settlement",
-  partial_settlement: "Partial settlement",
-  refund: "Refund",
-};
-
-const METHOD_LABEL = {
-  bank_transfer: "Bank transfer",
-  cash: "Cash",
+const METHOD_KEY = {
+  bank_transfer: "bankTransfer",
+  cash: "cash",
 };
 
 export default function SupplierPayments() {
+  const { t, formatDate, language } = useLanguage();
+  const isUr = language === "ur";
+  const currency = t("supplier.common.currency");
+  const trader = (name) => localizeTrader(name, language);
   const [loading] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -118,12 +120,13 @@ export default function SupplierPayments() {
       const matchesQuery =
         query.trim() === "" ||
         p.agent.toLowerCase().includes(query.toLowerCase()) ||
+        trader(p.agent).includes(query) ||
         p.id.toLowerCase().includes(query.toLowerCase()) ||
         p.consignmentId.toLowerCase().includes(query.toLowerCase());
       const matchesStatus = statusFilter === "all" || p.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [payments, query, statusFilter]);
+  }, [payments, query, statusFilter, language]);
 
   const stats = useMemo(() => {
     const totalReceived = payments
@@ -145,16 +148,16 @@ export default function SupplierPayments() {
   }, [payments]);
 
   return (
-    <div className="min-h-full bg-[#faf9f5] px-6 py-8 sm:px-8">
+    <div className="min-h-full bg-[#faf9f5] px-6 py-8 sm:px-8" dir={isUr ? "rtl" : "ltr"} style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : undefined }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="font-serif text-3xl text-[#1e4620] mb-1.5">
-            Payments &amp; settlements
+            {t("supplier.payments.title")}
           </h1>
           <p className="text-gray-500">
-            Every settlement received from your agents, and your running
-            account balance.
+            {t("supplier.payments.subtitle")}
           </p>
         </div>
         <button
@@ -162,7 +165,7 @@ export default function SupplierPayments() {
           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-[#1e4620] hover:bg-gray-50 transition-colors self-start"
         >
           <Download className="h-4 w-4" />
-          Export ledger
+          {t("supplier.payments.exportLedger")}
         </button>
       </div>
 
@@ -170,24 +173,24 @@ export default function SupplierPayments() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           icon={<Wallet className="h-5 w-5" />}
-          label="Current balance"
-          value={`PKR ${stats.currentBalance.toLocaleString()}`}
+          label={t("supplier.payments.stats.currentBalance")}
+          value={`${currency} ${stats.currentBalance.toLocaleString()}`}
           accent
         />
         <StatCard
           icon={<Banknote className="h-5 w-5" />}
-          label="Total received"
-          value={`PKR ${stats.totalReceived.toLocaleString()}`}
+          label={t("supplier.payments.stats.totalReceived")}
+          value={`${currency} ${stats.totalReceived.toLocaleString()}`}
         />
         <StatCard
           icon={<TrendingUp className="h-5 w-5" />}
-          label="Received this month"
-          value={`PKR ${stats.thisMonth.toLocaleString()}`}
+          label={t("supplier.payments.stats.receivedThisMonth")}
+          value={`${currency} ${stats.thisMonth.toLocaleString()}`}
         />
         <StatCard
           icon={<Clock className="h-5 w-5" />}
-          label="Pending settlements"
-          value={`PKR ${stats.pendingAmount.toLocaleString()}`}
+          label={t("supplier.payments.stats.pendingSettlements")}
+          value={`${currency} ${stats.pendingAmount.toLocaleString()}`}
         />
       </div>
 
@@ -197,7 +200,7 @@ export default function SupplierPayments() {
           <Search className="h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by agent, payment ID, or consignment…"
+            placeholder={t("supplier.payments.searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 outline-none text-sm text-gray-800 placeholder:text-gray-400 bg-transparent"
@@ -210,10 +213,10 @@ export default function SupplierPayments() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="outline-none text-sm text-gray-800 bg-transparent appearance-none cursor-pointer pr-5"
           >
-            <option value="all">All statuses</option>
-            <option value="completed">Completed</option>
-            <option value="pending">Pending</option>
-            <option value="failed">Failed</option>
+            <option value="all">{t("supplier.payments.filters.all")}</option>
+            <option value="completed">{t("supplier.payments.filters.completed")}</option>
+            <option value="pending">{t("supplier.payments.filters.pending")}</option>
+            <option value="failed">{t("supplier.payments.filters.failed")}</option>
           </select>
           <ChevronDown className="h-3.5 w-3.5 text-gray-400 -ml-6 pointer-events-none" />
         </div>
@@ -224,27 +227,27 @@ export default function SupplierPayments() {
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
             <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="text-sm">Loading payments…</span>
+            <span className="text-sm">{t("supplier.payments.loading")}</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
             <Inbox className="h-8 w-8" />
-            <p className="text-sm">No payments match your search.</p>
+            <p className="text-sm">{t("supplier.payments.noResults")}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-[#1e4620]/5 text-left text-gray-600">
-                  <Th>Payment</Th>
-                  <Th>Date</Th>
-                  <Th>Agent</Th>
-                  <Th>Consignment</Th>
-                  <Th>Type</Th>
-                  <Th>Method</Th>
-                  <Th className="text-right">Amount</Th>
-                  <Th className="text-right">Balance</Th>
-                  <Th>Status</Th>
+                  <Th>{t("supplier.payments.table.payment")}</Th>
+                  <Th>{t("supplier.payments.table.date")}</Th>
+                  <Th>{t("supplier.payments.table.agent")}</Th>
+                  <Th>{t("supplier.payments.table.consignment")}</Th>
+                  <Th>{t("supplier.payments.table.type")}</Th>
+                  <Th>{t("supplier.payments.table.method")}</Th>
+                  <Th className="text-right">{t("supplier.payments.table.amount")}</Th>
+                  <Th className="text-right">{t("supplier.payments.table.balance")}</Th>
+                  <Th>{t("supplier.payments.table.status")}</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -252,16 +255,12 @@ export default function SupplierPayments() {
                   <tr key={p.id} className="hover:bg-[#faf9f5] transition-colors">
                     <Td className="font-medium text-[#1e4620]">{p.id}</Td>
                     <Td className="text-gray-500">
-                      {new Date(p.date).toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {formatDate(p.date)}
                     </Td>
-                    <Td>{p.agent}</Td>
+                    <Td>{trader(p.agent)}</Td>
                     <Td className="text-gray-500">{p.consignmentId}</Td>
-                    <Td>{TYPE_LABEL[p.type]}</Td>
-                    <Td className="text-gray-500">{METHOD_LABEL[p.method]}</Td>
+                    <Td>{t(`supplier.payments.types.${TYPE_KEY[p.type]}`)}</Td>
+                    <Td className="text-gray-500">{t(`supplier.payments.methods.${METHOD_KEY[p.method]}`)}</Td>
                     <Td className="text-right">
                       <span
                         className={`inline-flex items-center gap-1 font-medium ${
@@ -273,18 +272,18 @@ export default function SupplierPayments() {
                         ) : (
                           <ArrowDownCircle className="h-3.5 w-3.5" />
                         )}
-                        {p.amount < 0 ? "-" : ""}PKR{" "}
+                        {p.amount < 0 ? "-" : ""}{currency}{" "}
                         {Math.abs(p.amount).toLocaleString()}
                       </span>
                     </Td>
                     <Td className="text-right font-medium">
-                      PKR {p.runningBalance.toLocaleString()}
+                      {currency} {p.runningBalance.toLocaleString()}
                     </Td>
                     <Td>
                       <span
                         className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_STYLES[p.status]}`}
                       >
-                        {STATUS_LABEL[p.status]}
+                        {t(`supplier.payments.status.${p.status}`)}
                       </span>
                     </Td>
                   </tr>

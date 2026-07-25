@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Camera, Save, Lock } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const COLORS = {
   forest: "#1e4620",
@@ -13,37 +14,40 @@ const COLORS = {
   border: "#d9ddce",
 };
 
+// Business/contact data (names, emails, phone numbers) is NOT translated —
+// only extraLabelKey/subtitleKey (UI copy) route through t().
 const ROLE_DEFAULTS = {
   supplier: {
-    subtitle: "Supplier",
+    subtitleKey: "common.roles.supplier",
     name: "Ahmed Farms",
     email: "ahmed@ahmedfarms.pk",
     phone: "+92 300 1234567",
     address: "Plot 14, Super Highway, Karachi",
-    extraLabel: "Farm / business name",
+    extraLabelKey: "profile.extraLabel.supplier",
     extraValue: "Ahmed Farms",
   },
   agent: {
-    subtitle: "Commission Agent",
+    subtitleKey: "common.roles.agent",
     name: "Rafiq Traders",
     email: "rafiq@rafiqtraders.pk",
     phone: "+92 321 9988776",
     address: "Shop 22, Sabzi Mandi, Karachi",
-    extraLabel: "Commission rate (%)",
+    extraLabelKey: "profile.extraLabel.agent",
     extraValue: "6.5",
   },
   buyer: {
-    subtitle: "Buyer",
+    subtitleKey: "common.roles.buyer",
     name: "Green Valley Store",
     email: "orders@greenvalley.pk",
     phone: "+92 333 4455667",
     address: "Shop 8, DHA Phase 5, Karachi",
-    extraLabel: "Preferred payment method",
+    extraLabelKey: "profile.extraLabel.buyer",
     extraValue: "Credit",
   },
 };
 
 export default function ProfileSettings({ role }) {
+  const { t } = useLanguage();
   const defaults = ROLE_DEFAULTS[role] || ROLE_DEFAULTS.supplier;
   const [form, setForm] = useState({
     name: defaults.name,
@@ -81,10 +85,10 @@ export default function ProfileSettings({ role }) {
       {/* header */}
       <div className="mb-8">
         <h1 className="font-display text-2xl sm:text-3xl" style={{ color: COLORS.ink }}>
-          Profile settings
+          {t("profile.title")}
         </h1>
         <p className="text-sm mt-1" style={{ color: COLORS.sub }}>
-          Manage your account information and security.
+          {t("profile.subtitle")}
         </p>
       </div>
 
@@ -116,7 +120,7 @@ export default function ProfileSettings({ role }) {
                   {form.name}
                 </p>
                 <p className="text-xs" style={{ color: COLORS.sub }}>
-                  {defaults.subtitle}
+                  {t(defaults.subtitleKey)}
                 </p>
               </div>
             </div>
@@ -124,7 +128,7 @@ export default function ProfileSettings({ role }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                  Full name / business name
+                  {t("profile.fullNameLabel")}
                 </label>
                 <input
                   value={form.name}
@@ -136,7 +140,7 @@ export default function ProfileSettings({ role }) {
 
               <div>
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                  Email address
+                  {t("profile.emailLabel")}
                 </label>
                 <input
                   type="email"
@@ -149,7 +153,7 @@ export default function ProfileSettings({ role }) {
 
               <div>
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                  Phone number
+                  {t("profile.phoneLabel")}
                 </label>
                 <input
                   value={form.phone}
@@ -161,7 +165,7 @@ export default function ProfileSettings({ role }) {
 
               <div className="sm:col-span-2">
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                  Address
+                  {t("profile.addressLabel")}
                 </label>
                 <input
                   value={form.address}
@@ -173,7 +177,7 @@ export default function ProfileSettings({ role }) {
 
               <div className="sm:col-span-2">
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                  {defaults.extraLabel}
+                  {t(defaults.extraLabelKey)}
                 </label>
                 <input
                   value={form.extraValue}
@@ -190,7 +194,7 @@ export default function ProfileSettings({ role }) {
               style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
             >
               <Save size={16} />
-              Save changes
+              {t("profile.saveChanges")}
             </button>
           </form>
 
@@ -203,14 +207,14 @@ export default function ProfileSettings({ role }) {
             <div className="flex items-center gap-2 mb-5">
               <Lock size={16} color={COLORS.forest} />
               <h2 className="font-display text-lg" style={{ color: COLORS.ink }}>
-                Change password
+                {t("profile.changePassword")}
               </h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                  Current password
+                  {t("profile.currentPassword")}
                 </label>
                 <input
                   type="password"
@@ -223,7 +227,7 @@ export default function ProfileSettings({ role }) {
               </div>
               <div>
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                  New password
+                  {t("profile.newPassword")}
                 </label>
                 <input
                   type="password"
@@ -236,7 +240,7 @@ export default function ProfileSettings({ role }) {
               </div>
               <div>
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                  Confirm new password
+                  {t("profile.confirmNewPassword")}
                 </label>
                 <input
                   type="password"
@@ -254,7 +258,7 @@ export default function ProfileSettings({ role }) {
               className="px-4 py-2.5 rounded-lg text-sm font-medium mt-6"
               style={{ backgroundColor: COLORS.forest, color: "white" }}
             >
-              Update password
+              {t("profile.updatePassword")}
             </button>
           </form>
         </div>
@@ -264,18 +268,18 @@ export default function ProfileSettings({ role }) {
           className="rounded-xl p-6 border h-fit"
           style={{ backgroundColor: COLORS.forest, borderColor: COLORS.forest }}
         >
-          <h3 className="font-display text-base text-white mb-4">Account overview</h3>
+          <h3 className="font-display text-base text-white mb-4">{t("profile.accountOverview")}</h3>
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
-              <span style={{ color: "#c9d9c2" }}>Role</span>
-              <span className="text-white font-medium">{defaults.subtitle}</span>
+              <span style={{ color: "#c9d9c2" }}>{t("profile.role")}</span>
+              <span className="text-white font-medium">{t(defaults.subtitleKey)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span style={{ color: "#c9d9c2" }}>Account status</span>
-              <span className="text-white font-medium">Active</span>
+              <span style={{ color: "#c9d9c2" }}>{t("profile.accountStatus")}</span>
+              <span className="text-white font-medium">{t("profile.active")}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span style={{ color: "#c9d9c2" }}>Member since</span>
+              <span style={{ color: "#c9d9c2" }}>{t("profile.memberSince")}</span>
               <span className="text-white font-medium">Jan 2026</span>
             </div>
           </div>

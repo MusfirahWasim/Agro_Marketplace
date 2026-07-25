@@ -7,25 +7,15 @@ import {
   ChevronDown,
   Search,
 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import LanguageSelector from "../i18n/LanguageSelector";
+import { localizeTrader, formatAgentCurrency, formatAgentDate } from "./agentLocale";
 
 /**
  * AgentSettlements.jsx
  * Commission Agent — agent-to-supplier settlements (payments the agent owes
- * suppliers once consigned stock has sold).
- *
- * Styling note: this file uses plain inline styles (same approach as
- * AgentInventory.jsx / AgentCommissions.jsx) instead of Tailwind classes,
- * so the theme renders correctly even if Tailwind isn't set up/scanning
- * this file yet.
- *
- * Palette (sampled from the dashboard reference screenshot):
- *  - Page background   #faf8f2
- *  - Card background    #ffffff
- *  - Card border         #ece8de
- *  - Deep forest green   #1e4620
- *  - Sage/leaf green     #4c8b3c
- *  - Honey gold          #f0b84c
- *  - Heading text        #16211a
+ * suppliers once consigned stock has sold). Fully localized (English / Urdu),
+ * including supplier names, dates, and currency.
  *
  * Data below is illustrative — swap MOCK_SETTLEMENTS for a call to
  * lib/api.js (e.g. getAgentSettlements()) once the endpoint is wired up.
@@ -54,14 +44,7 @@ const MOCK_SETTLEMENTS = [
   { id: "STL-3055", supplier: "Green Basket Growers", consignment: "CN-1039", amount: 54000, dueDate: "2026-06-29", status: "settled" },
 ];
 
-const STATUS_META = {
-  settled: { label: "Settled", dot: "#4c8b3c", text: "#4b6b3f", bg: "#dde8d0" },
-  due: { label: "Due", dot: "#f0b84c", text: "#8a6413", bg: "#f5e6c5" },
-  overdue: { label: "Overdue", dot: "#b15a41", text: "#b15a41", bg: "#f4d9d0" },
-};
-
-function StatusBadge({ status }) {
-  const meta = STATUS_META[status];
+function StatusBadge({ meta }) {
   return (
     <span
       style={{
@@ -116,8 +99,17 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
 }
 
 export default function AgentSettlements() {
+  const { language, t } = useLanguage();
+  const isUr = language === "ur";
+  const trader = (name) => localizeTrader(name, language);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const STATUS_META = {
+    settled: { label: t("agent.common.status.settled"), dot: "#4c8b3c", text: "#4b6b3f", bg: "#dde8d0" },
+    due: { label: t("agent.common.status.due"), dot: "#f0b84c", text: "#8a6413", bg: "#f5e6c5" },
+    overdue: { label: t("agent.common.status.overdue"), dot: "#b15a41", text: "#b15a41", bg: "#f4d9d0" },
+  };
 
   const rows = MOCK_SETTLEMENTS;
 
@@ -126,12 +118,13 @@ export default function AgentSettlements() {
       const q = query.toLowerCase();
       const matchesQuery =
         r.supplier.toLowerCase().includes(q) ||
+        trader(r.supplier).includes(query) ||
         r.id.toLowerCase().includes(q) ||
         r.consignment.toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || r.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [rows, query, statusFilter]);
+  }, [rows, query, statusFilter, language]);
 
   const totals = useMemo(() => {
     const settled = rows.filter((r) => r.status === "settled").reduce((s, r) => s + r.amount, 0);
@@ -149,23 +142,27 @@ export default function AgentSettlements() {
   const tdStyle = { padding: "16px 20px", fontSize: 14, color: "#33403a" };
 
   return (
-    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "system-ui, -apple-system, sans-serif" }} dir={isUr ? "rtl" : "ltr"}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         {/* Page header */}
-        <div>
-          <h1
-            style={{
-              fontFamily: "Georgia, 'Times New Roman', serif",
-              fontSize: 30,
-              color: COLORS.heading,
-              margin: 0,
-            }}
-          >
-            Supplier settlements
-          </h1>
-          <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
-            What you owe suppliers for sold consignments, and what's already been settled.
-          </p>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h1
+              style={{
+                fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, 'Times New Roman', serif",
+                fontSize: 30,
+                color: COLORS.heading,
+                margin: 0,
+              }}
+            >
+              {t("agent.settlements.title")}
+            </h1>
+            <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
+              {t("agent.settlements.subtitle")}
+            </p>
+          </div>
+          <LanguageSelector />
         </div>
 
         {/* Stat cards */}
@@ -176,10 +173,10 @@ export default function AgentSettlements() {
             gap: 20,
           }}
         >
-          <StatCard icon={Landmark} label="Owed to suppliers" value={`Rs ${totals.owed.toLocaleString()}`} iconBg="#e8cdc2" iconColor="#b15a41" />
-          <StatCard icon={Clock} label="Due this month" value={`Rs ${totals.due.toLocaleString()}`} iconBg="#f6ddab" iconColor="#c9922c" />
-          <StatCard icon={AlertTriangle} label="Overdue" value={`Rs ${totals.overdue.toLocaleString()}`} iconBg="#e8cdc2" iconColor="#b15a41" />
-          <StatCard icon={CircleCheck} label="Settled this month" value={`Rs ${totals.settled.toLocaleString()}`} iconBg="#dde8d0" iconColor={COLORS.sage} />
+          <StatCard icon={Landmark} label={t("agent.settlements.stats.owedToSuppliers")} value={formatAgentCurrency(totals.owed, t)} iconBg="#e8cdc2" iconColor="#b15a41" />
+          <StatCard icon={Clock} label={t("agent.settlements.stats.dueThisMonth")} value={formatAgentCurrency(totals.due, t)} iconBg="#f6ddab" iconColor="#c9922c" />
+          <StatCard icon={AlertTriangle} label={t("agent.settlements.stats.overdue")} value={formatAgentCurrency(totals.overdue, t)} iconBg="#e8cdc2" iconColor="#b15a41" />
+          <StatCard icon={CircleCheck} label={t("agent.settlements.stats.settledThisMonth")} value={formatAgentCurrency(totals.settled, t)} iconBg="#dde8d0" iconColor={COLORS.sage} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
@@ -204,8 +201,8 @@ export default function AgentSettlements() {
                 flexWrap: "wrap",
               }}
             >
-              <h2 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                Settlement history
+              <h2 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+                {t("agent.settlements.settlementHistory")}
               </h2>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div
@@ -222,7 +219,7 @@ export default function AgentSettlements() {
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search supplier or ID"
+                    placeholder={t("agent.common.searchSupplierOrId")}
                     style={{
                       border: "none",
                       outline: "none",
@@ -247,10 +244,10 @@ export default function AgentSettlements() {
                       background: "#fff",
                     }}
                   >
-                    <option value="all">All statuses</option>
-                    <option value="settled">Settled</option>
-                    <option value="due">Due</option>
-                    <option value="overdue">Overdue</option>
+                    <option value="all">{t("agent.common.allStatuses")}</option>
+                    <option value="settled">{t("agent.common.status.settled")}</option>
+                    <option value="due">{t("agent.common.status.due")}</option>
+                    <option value="overdue">{t("agent.common.status.overdue")}</option>
                   </select>
                   <ChevronDown
                     size={16}
@@ -265,33 +262,33 @@ export default function AgentSettlements() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th style={thStyle}>Settlement</th>
-                    <th style={thStyle}>Supplier</th>
-                    <th style={thStyle}>Consignment</th>
-                    <th style={thStyle}>Amount</th>
-                    <th style={thStyle}>Due date</th>
-                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>{t("agent.common.table.settlement")}</th>
+                    <th style={thStyle}>{t("agent.common.table.supplier")}</th>
+                    <th style={thStyle}>{t("agent.common.table.consignment")}</th>
+                    <th style={thStyle}>{t("agent.common.table.amount")}</th>
+                    <th style={thStyle}>{t("agent.common.table.dueDate")}</th>
+                    <th style={thStyle}>{t("agent.common.table.status")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((r) => (
                     <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
                       <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>{r.id}</td>
-                      <td style={tdStyle}>{r.supplier}</td>
+                      <td style={tdStyle}>{trader(r.supplier)}</td>
                       <td style={{ ...tdStyle, color: COLORS.mutedText }}>{r.consignment}</td>
                       <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>
-                        Rs {r.amount.toLocaleString()}
+                        {formatAgentCurrency(r.amount, t)}
                       </td>
-                      <td style={tdStyle}>{r.dueDate}</td>
+                      <td style={tdStyle}>{formatAgentDate(r.dueDate, language)}</td>
                       <td style={tdStyle}>
-                        <StatusBadge status={r.status} />
+                        <StatusBadge meta={STATUS_META[r.status]} />
                       </td>
                     </tr>
                   ))}
                   {filtered.length === 0 && (
                     <tr>
                       <td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: COLORS.mutedText }}>
-                        No settlements match your search.
+                        {t("agent.settlements.noResults")}
                       </td>
                     </tr>
                   )}
@@ -306,19 +303,19 @@ export default function AgentSettlements() {
             <div style={{ borderRadius: 16, background: COLORS.forest, padding: 24, color: "#fff" }}>
               <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
                 <AlertTriangle size={20} color={COLORS.gold} />
-                <h3 style={{ fontFamily: "Georgia, serif", fontSize: 18, margin: 0 }}>Owed to suppliers</h3>
+                <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, margin: 0 }}>{t("agent.settlements.owedToSuppliers")}</h3>
               </div>
               {owedItems.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {owedItems.map((r) => (
                     <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{r.supplier}</span>
-                      <span style={{ fontWeight: 600 }}>Rs {r.amount.toLocaleString()}</span>
+                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{trader(r.supplier)}</span>
+                      <span style={{ fontWeight: 600 }}>{formatAgentCurrency(r.amount, t)}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>Nothing owed right now.</p>
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>{t("agent.settlements.nothingOwed")}</p>
               )}
               <button
                 style={{
@@ -336,7 +333,7 @@ export default function AgentSettlements() {
                 onMouseOver={(e) => (e.currentTarget.style.background = COLORS.goldHover)}
                 onMouseOut={(e) => (e.currentTarget.style.background = COLORS.gold)}
               >
-                Settle now
+                {t("agent.settlements.settleNow")}
               </button>
             </div>
 
@@ -350,21 +347,21 @@ export default function AgentSettlements() {
                 boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
               }}
             >
-              <h3 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                This month
+              <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+                {t("agent.common.thisMonth")}
               </h3>
               <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12, fontSize: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Settlements recorded</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.settlements.thisMonth.settlementsRecorded")}</span>
                   <span style={{ fontWeight: 600, color: COLORS.heading }}>{rows.length}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Total settled</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>Rs {totals.settled.toLocaleString()}</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.settlements.thisMonth.totalSettled")}</span>
+                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{formatAgentCurrency(totals.settled, t)}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Still outstanding</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>Rs {totals.owed.toLocaleString()}</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.settlements.thisMonth.stillOutstanding")}</span>
+                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{formatAgentCurrency(totals.owed, t)}</span>
                 </div>
               </div>
             </div>

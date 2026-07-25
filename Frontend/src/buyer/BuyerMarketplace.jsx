@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Sprout, Plus, Minus, ShoppingCart, X } from "lucide-react";
 import { CATEGORIES, CONSIGNMENTS } from "../data/consignments";
+import { useLanguage } from "../i18n/LanguageContext";
+import { localizeProduct, localizeCategory, localizeTrader } from "../i18n/dataLocale";
 
 const COLORS = {
   forest: "#1e4620",
@@ -18,14 +20,21 @@ const COLORS = {
 
 export default function BuyerMarketplace() {
   const navigate = useNavigate();
+  const { language, t } = useLanguage();
+  const isUr = language === "ur";
+  const product = (name) => localizeProduct(name, language);
+  const category = (name) => localizeCategory(name, language);
+  const trader = (name) => localizeTrader(name, language);
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
+  const [activeCategory, setActiveCategory] = useState("All");
   const [cart, setCart] = useState({}); // consignId -> qty
   const [showCart, setShowCart] = useState(false);
 
   const filtered = CONSIGNMENTS.filter((c) => {
-    const matchesSearch = c.product.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = category === "All" || c.category === category;
+    const matchesSearch =
+      c.product.toLowerCase().includes(search.toLowerCase()) ||
+      product(c.product).includes(search);
+    const matchesCategory = activeCategory === "All" || c.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -52,23 +61,24 @@ export default function BuyerMarketplace() {
 
   const cartTotal = cartItems.reduce((sum, i) => sum + i.qty * i.price, 0);
   const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
+  const currency = t("buyer.common.currency");
 
   return (
-    <div className="font-body relative" style={{ backgroundColor: COLORS.cream }}>
+    <div className="font-body relative" style={{ backgroundColor: COLORS.cream }} dir={isUr ? "rtl" : "ltr"}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
-        .font-display { font-family: 'Fraunces', serif; }
-        .font-body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        .font-display { font-family: ${isUr ? "'Noto Nastaliq Urdu', serif" : "'Fraunces', serif"}; }
+        .font-body { font-family: ${isUr ? "'Noto Nastaliq Urdu', serif" : "'Inter', sans-serif"}; }
       `}</style>
 
       {/* header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl" style={{ color: COLORS.ink }}>
-            Marketplace
+            {t("buyer.marketplace.title")}
           </h1>
           <p className="text-sm mt-1" style={{ color: COLORS.sub }}>
-            Browse fresh consignments available from market agents.
+            {t("buyer.marketplace.subtitle")}
           </p>
         </div>
         <button
@@ -77,7 +87,7 @@ export default function BuyerMarketplace() {
           style={{ backgroundColor: COLORS.forest, color: "white" }}
         >
           <ShoppingCart size={16} />
-          Cart
+          {t("buyer.marketplace.cart")}
           {cartCount > 0 && (
             <span
               className="absolute -top-2 -right-2 w-5 h-5 rounded-full text-[11px] flex items-center justify-center font-medium"
@@ -96,24 +106,26 @@ export default function BuyerMarketplace() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products..."
+            placeholder={t("buyer.marketplace.searchPlaceholder")}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg border text-sm outline-none"
             style={{ borderColor: COLORS.border, backgroundColor: "white" }}
           />
         </div>
+        {/* Category values (c) stay as the underlying English keys used for
+            filtering — only the displayed label is localized via category(). */}
         <div className="flex gap-2 flex-wrap">
           {CATEGORIES.map((c) => (
             <button
               key={c}
-              onClick={() => setCategory(c)}
+              onClick={() => setActiveCategory(c)}
               className="text-xs font-medium px-3 py-2 rounded-lg border"
               style={
-                category === c
+                activeCategory === c
                   ? { backgroundColor: COLORS.leaf, color: "white", borderColor: COLORS.leaf }
                   : { color: COLORS.sub, borderColor: COLORS.border }
               }
             >
-              {c}
+              {category(c)}
             </button>
           ))}
         </div>
@@ -135,16 +147,16 @@ export default function BuyerMarketplace() {
               <Sprout size={20} color={COLORS.leaf} />
             </div>
             <h3 className="font-display text-base mb-0.5" style={{ color: COLORS.ink }}>
-              {c.product}
+              {product(c.product)}
             </h3>
             <p className="text-xs mb-3" style={{ color: COLORS.sub }}>
-              via {c.agent}
+              {t("buyer.common.via", { agent: trader(c.agent) })}
             </p>
 
             <div className="flex items-center justify-between text-xs mb-4" style={{ color: COLORS.sub }}>
-              <span>{c.available} {c.unit} available</span>
+              <span>{t("buyer.common.availableUnit", { count: c.available, unit: c.unit })}</span>
               <span className="font-medium" style={{ color: COLORS.ink }}>
-                Rs {c.price}/{c.unit}
+                {currency} {c.price}/{c.unit}
               </span>
             </div>
 
@@ -178,7 +190,7 @@ export default function BuyerMarketplace() {
                 style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
               >
                 <Plus size={14} />
-                Add
+                {t("buyer.marketplace.add")}
               </button>
             )}
           </div>
@@ -189,7 +201,7 @@ export default function BuyerMarketplace() {
             className="col-span-full text-center py-12 rounded-xl border"
             style={{ borderColor: COLORS.greige, color: COLORS.sub }}
           >
-            No products match your search.
+            {t("buyer.marketplace.noResults")}
           </div>
         )}
       </div>
@@ -208,7 +220,7 @@ export default function BuyerMarketplace() {
           >
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-xl" style={{ color: COLORS.ink }}>
-                Your order
+                {t("buyer.marketplace.cartDrawerTitle")}
               </h2>
               <button onClick={() => setShowCart(false)}>
                 <X size={20} color={COLORS.sub} />
@@ -218,7 +230,7 @@ export default function BuyerMarketplace() {
             <div className="flex-1 overflow-y-auto space-y-3">
               {cartItems.length === 0 && (
                 <p className="text-sm" style={{ color: COLORS.sub }}>
-                  Your cart is empty. Add products from the marketplace.
+                  {t("buyer.marketplace.cartEmpty")}
                 </p>
               )}
 
@@ -230,14 +242,14 @@ export default function BuyerMarketplace() {
                 >
                   <div>
                     <p className="text-sm font-medium" style={{ color: COLORS.ink }}>
-                      {item.product}
+                      {product(item.product)}
                     </p>
                     <p className="text-xs" style={{ color: COLORS.sub }}>
-                      {item.qty} &times; Rs {item.price}
+                      {item.qty} &times; {currency} {item.price}
                     </p>
                   </div>
                   <p className="text-sm font-medium" style={{ color: COLORS.leaf }}>
-                    Rs {(item.qty * item.price).toLocaleString()}
+                    {currency} {(item.qty * item.price).toLocaleString()}
                   </p>
                 </div>
               ))}
@@ -246,9 +258,11 @@ export default function BuyerMarketplace() {
             {cartItems.length > 0 && (
               <div className="border-t pt-4 mt-4" style={{ borderColor: COLORS.greige }}>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm" style={{ color: COLORS.sub }}>Total</span>
+                  <span className="text-sm" style={{ color: COLORS.sub }}>
+                    {t("buyer.common.total")}
+                  </span>
                   <span className="font-display text-xl" style={{ color: COLORS.ink }}>
-                    Rs {cartTotal.toLocaleString()}
+                    {currency} {cartTotal.toLocaleString()}
                   </span>
                 </div>
                 <button
@@ -256,7 +270,7 @@ export default function BuyerMarketplace() {
                   className="w-full py-3 rounded-lg text-sm font-medium"
                   style={{ backgroundColor: COLORS.forest, color: "white" }}
                 >
-                  Proceed to checkout
+                  {t("buyer.marketplace.proceedToCheckout")}
                 </button>
               </div>
             )}

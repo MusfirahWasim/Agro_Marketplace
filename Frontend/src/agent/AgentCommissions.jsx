@@ -7,23 +7,15 @@ import {
   ChevronDown,
   Search,
 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import LanguageSelector from "../i18n/LanguageSelector";
+import { localizeTrader, formatAgentCurrency } from "./agentLocale";
 
 /**
  * AgentCommissions.jsx
  * Commission Agent — commission earnings on orders fulfilled through their consignments.
- *
- * Styling note: this file uses plain inline styles (same approach as
- * AgentInventory.jsx) instead of Tailwind classes, so the theme renders
- * correctly even if Tailwind isn't set up/scanning this file yet.
- *
- * Palette (sampled from the dashboard reference screenshot):
- *  - Page background   #faf8f2
- *  - Card background    #ffffff
- *  - Card border         #ece8de
- *  - Deep forest green   #1e4620
- *  - Sage/leaf green     #4c8b3c
- *  - Honey gold          #f0b84c
- *  - Heading text        #16211a
+ * Fully localized: renders in English or Urdu (including trader names, dates,
+ * currency, and status labels) via LanguageContext.
  *
  * Data below is illustrative — swap MOCK_COMMISSIONS for a call to
  * lib/api.js (e.g. getAgentCommissions()) once the endpoint is wired up.
@@ -52,14 +44,7 @@ const MOCK_COMMISSIONS = [
   { id: "ORD-2194", consignment: "CN-1030", buyer: "Karachi Mart", saleAmount: 21400, rate: 7.5, date: "2026-07-02", status: "paid" },
 ];
 
-const STATUS_META = {
-  paid: { label: "Paid", dot: "#4c8b3c", text: "#4b6b3f", bg: "#dde8d0" },
-  pending: { label: "Pending", dot: "#f0b84c", text: "#8a6413", bg: "#f5e6c5" },
-  reversed: { label: "Reversed", dot: "#b15a41", text: "#b15a41", bg: "#f4d9d0" },
-};
-
-function StatusBadge({ status }) {
-  const meta = STATUS_META[status];
+function StatusBadge({ status, meta }) {
   return (
     <span
       style={{
@@ -114,8 +99,17 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
 }
 
 export default function AgentCommissions() {
+  const { language, t } = useLanguage();
+  const isUr = language === "ur";
+  const trader = (name) => localizeTrader(name, language);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const STATUS_META = {
+    paid: { label: t("agent.common.status.paid"), dot: "#4c8b3c", text: "#4b6b3f", bg: "#dde8d0" },
+    pending: { label: t("agent.common.status.pending"), dot: "#f0b84c", text: "#8a6413", bg: "#f5e6c5" },
+    reversed: { label: t("agent.common.status.reversed"), dot: "#b15a41", text: "#b15a41", bg: "#f4d9d0" },
+  };
 
   const rows = useMemo(
     () =>
@@ -131,12 +125,13 @@ export default function AgentCommissions() {
       const q = query.toLowerCase();
       const matchesQuery =
         r.buyer.toLowerCase().includes(q) ||
+        trader(r.buyer).includes(query) ||
         r.id.toLowerCase().includes(q) ||
         r.consignment.toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || r.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [rows, query, statusFilter]);
+  }, [rows, query, statusFilter, language]);
 
   const totals = useMemo(() => {
     const earned = rows.reduce((s, r) => s + r.commission, 0);
@@ -152,23 +147,27 @@ export default function AgentCommissions() {
   const tdStyle = { padding: "16px 20px", fontSize: 14, color: "#33403a" };
 
   return (
-    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "system-ui, -apple-system, sans-serif" }} dir={isUr ? "rtl" : "ltr"}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         {/* Page header */}
-        <div>
-          <h1
-            style={{
-              fontFamily: "Georgia, 'Times New Roman', serif",
-              fontSize: 30,
-              color: COLORS.heading,
-              margin: 0,
-            }}
-          >
-            Commission earnings
-          </h1>
-          <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
-            Everything you've earned facilitating sales through your consignments.
-          </p>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h1
+              style={{
+                fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, 'Times New Roman', serif",
+                fontSize: 30,
+                color: COLORS.heading,
+                margin: 0,
+              }}
+            >
+              {t("agent.commissions.title")}
+            </h1>
+            <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
+              {t("agent.commissions.subtitle")}
+            </p>
+          </div>
+          <LanguageSelector />
         </div>
 
         {/* Stat cards */}
@@ -179,10 +178,10 @@ export default function AgentCommissions() {
             gap: 20,
           }}
         >
-          <StatCard icon={Wallet} label="Total earned" value={`Rs ${totals.earned.toLocaleString()}`} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={TrendingUp} label="Paid out" value={`Rs ${totals.paid.toLocaleString()}`} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={Clock} label="Pending payout" value={`Rs ${totals.pending.toLocaleString()}`} iconBg="#f6ddab" iconColor="#c9922c" />
-          <StatCard icon={Percent} label="Avg. commission rate" value={`${totals.avgRate.toFixed(1)}%`} iconBg="#e8cdc2" iconColor="#b15a41" />
+          <StatCard icon={Wallet} label={t("agent.commissions.stats.totalEarned")} value={formatAgentCurrency(totals.earned, t)} iconBg="#dde8d0" iconColor={COLORS.sage} />
+          <StatCard icon={TrendingUp} label={t("agent.commissions.stats.paidOut")} value={formatAgentCurrency(totals.paid, t)} iconBg="#dde8d0" iconColor={COLORS.sage} />
+          <StatCard icon={Clock} label={t("agent.commissions.stats.pendingPayout")} value={formatAgentCurrency(totals.pending, t)} iconBg="#f6ddab" iconColor="#c9922c" />
+          <StatCard icon={Percent} label={t("agent.commissions.stats.avgRate")} value={`${totals.avgRate.toFixed(1)}%`} iconBg="#e8cdc2" iconColor="#b15a41" />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
@@ -207,8 +206,8 @@ export default function AgentCommissions() {
                 flexWrap: "wrap",
               }}
             >
-              <h2 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                Commission history
+              <h2 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+                {t("agent.commissions.commissionHistory")}
               </h2>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div
@@ -225,7 +224,7 @@ export default function AgentCommissions() {
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search order or buyer"
+                    placeholder={t("agent.common.searchOrderBuyer")}
                     style={{
                       border: "none",
                       outline: "none",
@@ -250,10 +249,10 @@ export default function AgentCommissions() {
                       background: "#fff",
                     }}
                   >
-                    <option value="all">All statuses</option>
-                    <option value="paid">Paid</option>
-                    <option value="pending">Pending</option>
-                    <option value="reversed">Reversed</option>
+                    <option value="all">{t("agent.common.allStatuses")}</option>
+                    <option value="paid">{t("agent.common.status.paid")}</option>
+                    <option value="pending">{t("agent.common.status.pending")}</option>
+                    <option value="reversed">{t("agent.common.status.reversed")}</option>
                   </select>
                   <ChevronDown
                     size={16}
@@ -268,13 +267,13 @@ export default function AgentCommissions() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th style={thStyle}>Order</th>
-                    <th style={thStyle}>Consignment</th>
-                    <th style={thStyle}>Buyer</th>
-                    <th style={thStyle}>Sale amount</th>
-                    <th style={thStyle}>Rate</th>
-                    <th style={thStyle}>Commission</th>
-                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>{t("agent.common.table.order")}</th>
+                    <th style={thStyle}>{t("agent.common.table.consignment")}</th>
+                    <th style={thStyle}>{t("agent.common.table.buyer")}</th>
+                    <th style={thStyle}>{t("agent.common.table.saleAmount")}</th>
+                    <th style={thStyle}>{t("agent.common.table.rate")}</th>
+                    <th style={thStyle}>{t("agent.common.table.commission")}</th>
+                    <th style={thStyle}>{t("agent.common.table.status")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -282,21 +281,21 @@ export default function AgentCommissions() {
                     <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
                       <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>{r.id}</td>
                       <td style={{ ...tdStyle, color: COLORS.mutedText }}>{r.consignment}</td>
-                      <td style={tdStyle}>{r.buyer}</td>
-                      <td style={tdStyle}>Rs {r.saleAmount.toLocaleString()}</td>
+                      <td style={tdStyle}>{trader(r.buyer)}</td>
+                      <td style={tdStyle}>{formatAgentCurrency(r.saleAmount, t)}</td>
                       <td style={tdStyle}>{r.rate}%</td>
                       <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>
-                        Rs {r.commission.toLocaleString()}
+                        {formatAgentCurrency(r.commission, t)}
                       </td>
                       <td style={tdStyle}>
-                        <StatusBadge status={r.status} />
+                        <StatusBadge status={r.status} meta={STATUS_META[r.status]} />
                       </td>
                     </tr>
                   ))}
                   {filtered.length === 0 && (
                     <tr>
                       <td colSpan={7} style={{ padding: "40px 20px", textAlign: "center", color: COLORS.mutedText }}>
-                        No commissions match your search.
+                        {t("agent.commissions.noResults")}
                       </td>
                     </tr>
                   )}
@@ -311,19 +310,19 @@ export default function AgentCommissions() {
             <div style={{ borderRadius: 16, background: COLORS.forest, padding: 24, color: "#fff" }}>
               <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
                 <Clock size={20} color={COLORS.gold} />
-                <h3 style={{ fontFamily: "Georgia, serif", fontSize: 18, margin: 0 }}>Pending payout</h3>
+                <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, margin: 0 }}>{t("agent.commissions.pendingPayout")}</h3>
               </div>
               {pendingItems.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {pendingItems.map((r) => (
                     <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{r.buyer}</span>
-                      <span style={{ fontWeight: 600 }}>Rs {r.commission.toLocaleString()}</span>
+                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{trader(r.buyer)}</span>
+                      <span style={{ fontWeight: 600 }}>{formatAgentCurrency(r.commission, t)}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>Nothing pending right now.</p>
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>{t("agent.commissions.nothingPending")}</p>
               )}
               <button
                 style={{
@@ -341,7 +340,7 @@ export default function AgentCommissions() {
                 onMouseOver={(e) => (e.currentTarget.style.background = COLORS.goldHover)}
                 onMouseOut={(e) => (e.currentTarget.style.background = COLORS.gold)}
               >
-                Request payout
+                {t("agent.commissions.requestPayout")}
               </button>
             </div>
 
@@ -355,20 +354,20 @@ export default function AgentCommissions() {
                 boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
               }}
             >
-              <h3 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                This month
+              <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+                {t("agent.common.thisMonth")}
               </h3>
               <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12, fontSize: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Orders commissioned</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.commissions.thisMonth.ordersCommissioned")}</span>
                   <span style={{ fontWeight: 600, color: COLORS.heading }}>{rows.length}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Total commission</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>Rs {totals.earned.toLocaleString()}</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.commissions.thisMonth.totalCommission")}</span>
+                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{formatAgentCurrency(totals.earned, t)}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Avg. rate</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.commissions.thisMonth.avgRate")}</span>
                   <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.avgRate.toFixed(1)}%</span>
                 </div>
               </div>

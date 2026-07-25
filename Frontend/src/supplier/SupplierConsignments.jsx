@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useLanguage } from "../i18n/LanguageContext";
+import { localizeTrader } from "../i18n/dataLocale";
 import {
   Search,
   SlidersHorizontal,
@@ -19,6 +21,8 @@ import {
  * Matches the Modern Organic & Eco-Friendly theme:
  * - Off-white page background, forest-green accents, gold highlights
  * - Stat cards, searchable/filterable table, status pills
+ * Fully localized (English / Urdu) via LanguageContext, including agent
+ * company names, product names, and dates.
  */
 
 // TODO: replace with real data from GET /suppliers/:id/consignments
@@ -28,6 +32,7 @@ const MOCK_CONSIGNMENTS = [
     date: "2026-07-14",
     agent: "Al-Barakah Commission House",
     product: "Basmati Rice",
+    productKey: "basmatiRice",
     grade: "A",
     quantity: 500,
     unit: "kg",
@@ -40,6 +45,7 @@ const MOCK_CONSIGNMENTS = [
     date: "2026-07-12",
     agent: "Zarai Traders",
     product: "Red Onion",
+    productKey: "redOnion",
     grade: "B",
     quantity: 1200,
     unit: "kg",
@@ -52,6 +58,7 @@ const MOCK_CONSIGNMENTS = [
     date: "2026-07-09",
     agent: "Al-Barakah Commission House",
     product: "Wheat",
+    productKey: "wheat",
     grade: "A",
     quantity: 2000,
     unit: "kg",
@@ -64,6 +71,7 @@ const MOCK_CONSIGNMENTS = [
     date: "2026-07-03",
     agent: "Green Valley Agents",
     product: "Tomato",
+    productKey: "tomato",
     grade: "A",
     quantity: 300,
     unit: "kg",
@@ -76,6 +84,7 @@ const MOCK_CONSIGNMENTS = [
     date: "2026-06-27",
     agent: "Zarai Traders",
     product: "Potato",
+    productKey: "potato",
     grade: "C",
     quantity: 900,
     unit: "kg",
@@ -92,12 +101,16 @@ const STATUS_STYLES = {
 };
 
 const STATUS_LABEL = {
-  active: "Active",
-  completed: "Completed",
-  pending: "Awaiting agent",
+  active: "supplier.status.active",
+  completed: "supplier.status.completed",
+  pending: "supplier.status.awaitingAgent",
 };
 
 export default function SupplierConsignments() {
+  const { t, formatDate, language } = useLanguage();
+  const isUr = language === "ur";
+  const unit = isUr ? "کلوگرام" : "kg";
+  const trader = (name) => localizeTrader(name, language);
   const [loading] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -110,11 +123,12 @@ export default function SupplierConsignments() {
         query.trim() === "" ||
         c.product.toLowerCase().includes(query.toLowerCase()) ||
         c.agent.toLowerCase().includes(query.toLowerCase()) ||
+        trader(c.agent).includes(query) ||
         c.id.toLowerCase().includes(query.toLowerCase());
       const matchesStatus = statusFilter === "all" || c.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [consignments, query, statusFilter]);
+  }, [consignments, query, statusFilter, language]);
 
   const stats = useMemo(() => {
     const totalConsignments = consignments.length;
@@ -128,16 +142,16 @@ export default function SupplierConsignments() {
   }, [consignments]);
 
   return (
-    <div className="min-h-full bg-[#faf9f5] px-6 py-8 sm:px-8">
+    <div className="min-h-full bg-[#faf9f5] px-6 py-8 sm:px-8" dir={isUr ? "rtl" : "ltr"} style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : undefined }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="font-serif text-3xl text-[#1e4620] mb-1.5">
-            Consignments
+            {t("supplier.consignments.title")}
           </h1>
           <p className="text-gray-500">
-            Every handover of your stock to a commission agent, and where it
-            stands.
+            {t("supplier.consignments.subtitle")}
           </p>
         </div>
       </div>
@@ -146,23 +160,23 @@ export default function SupplierConsignments() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           icon={<PackageCheck className="h-5 w-5" />}
-          label="Total consignments"
+          label={t("supplier.consignments.totalConsignments")}
           value={stats.totalConsignments}
         />
         <StatCard
           icon={<Users className="h-5 w-5" />}
-          label="Agents working with"
+          label={t("supplier.consignments.agentsWorkingWith")}
           value={stats.activeAgents}
         />
         <StatCard
           icon={<Scale className="h-5 w-5" />}
-          label="Total quantity consigned"
-          value={`${stats.totalQuantity.toLocaleString()} kg`}
+          label={t("supplier.consignments.totalQuantityConsigned")}
+          value={`${stats.totalQuantity.toLocaleString()} ${unit}`}
         />
         <StatCard
           icon={<Wallet className="h-5 w-5" />}
-          label="Still with agents"
-          value={`${stats.totalRemaining.toLocaleString()} kg`}
+          label={t("supplier.consignments.stillWithAgents")}
+          value={`${stats.totalRemaining.toLocaleString()} ${unit}`}
           accent
         />
       </div>
@@ -173,7 +187,7 @@ export default function SupplierConsignments() {
           <Search className="h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by product, agent, or consignment ID…"
+            placeholder={t("supplier.consignments.searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 outline-none text-sm text-gray-800 placeholder:text-gray-400 bg-transparent"
@@ -188,10 +202,10 @@ export default function SupplierConsignments() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="outline-none text-sm text-gray-800 bg-transparent appearance-none cursor-pointer pr-5"
             >
-              <option value="all">All statuses</option>
-              <option value="pending">Awaiting agent</option>
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
+              <option value="all">{t("supplier.filters.allStatuses")}</option>
+              <option value="pending">{t("supplier.status.awaitingAgent")}</option>
+              <option value="active">{t("supplier.status.active")}</option>
+              <option value="completed">{t("supplier.status.completed")}</option>
             </select>
             <ChevronDown className="h-3.5 w-3.5 text-gray-400 -ml-6 pointer-events-none" />
           </div>
@@ -203,26 +217,26 @@ export default function SupplierConsignments() {
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
             <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="text-sm">Loading consignments…</span>
+            <span className="text-sm">{t("supplier.common.loadingConsignments")}</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
             <Inbox className="h-8 w-8" />
-            <p className="text-sm">No consignments match your search.</p>
+            <p className="text-sm">{t("supplier.consignments.noConsignments")}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-[#1e4620]/5 text-left text-gray-600">
-                  <Th>Consignment</Th>
-                  <Th>Date</Th>
-                  <Th>Agent</Th>
-                  <Th>Product</Th>
-                  <Th className="text-right">Consigned</Th>
-                  <Th className="text-right">Sold</Th>
-                  <Th className="text-right">Remaining</Th>
-                  <Th>Status</Th>
+                  <Th>{t("supplier.consignments.table.consignment")}</Th>
+                  <Th>{t("supplier.consignments.table.date")}</Th>
+                  <Th>{t("supplier.consignments.table.agent")}</Th>
+                  <Th>{t("supplier.consignments.table.product")}</Th>
+                  <Th className="text-right">{t("supplier.consignments.table.consigned")}</Th>
+                  <Th className="text-right">{t("supplier.consignments.table.sold")}</Th>
+                  <Th className="text-right">{t("supplier.consignments.table.remaining")}</Th>
+                  <Th>{t("supplier.consignments.table.status")}</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -233,35 +247,33 @@ export default function SupplierConsignments() {
                   >
                     <Td className="font-medium text-[#1e4620]">{c.id}</Td>
                     <Td className="text-gray-500">
-                      {new Date(c.date).toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {formatDate(c.date)}
                     </Td>
-                    <Td>{c.agent}</Td>
+                    <Td>{trader(c.agent)}</Td>
                     <Td>
                       <div className="flex items-center gap-2">
-                        <span>{c.product}</span>
+                        <span>
+                          {c.productKey ? t(`common.produce.${c.productKey}`) : c.product}
+                        </span>
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f0b84c]/20 text-[#8a5a12]">
-                          Grade {c.grade}
+                          {t("supplier.common.grade")} {c.grade}
                         </span>
                       </div>
                     </Td>
                     <Td className="text-right">
-                      {c.quantity.toLocaleString()} {c.unit}
+                      {c.quantity.toLocaleString()} {unit}
                     </Td>
                     <Td className="text-right">
-                      {c.quantitySold.toLocaleString()} {c.unit}
+                      {c.quantitySold.toLocaleString()} {unit}
                     </Td>
                     <Td className="text-right font-medium">
-                      {c.quantityRemaining.toLocaleString()} {c.unit}
+                      {c.quantityRemaining.toLocaleString()} {unit}
                     </Td>
                     <Td>
                       <span
                         className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_STYLES[c.status]}`}
                       >
-                        {STATUS_LABEL[c.status]}
+                        {t(STATUS_LABEL[c.status])}
                       </span>
                     </Td>
                   </tr>

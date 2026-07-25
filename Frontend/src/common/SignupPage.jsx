@@ -11,6 +11,8 @@ import {
   ArrowRight,
   Check,
 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import LanguageSelector from "../i18n/LanguageSelector";
 
 /**
  * SignupPage
@@ -20,21 +22,26 @@ import {
  *
  * Roles: Supplier / Commission Agent / Buyer
  * (Admins are provisioned separately — see "Contact your market administrator" on Login)
+ *
+ * RTL handling: the outer wrapper is forced dir="ltr" so the two columns
+ * never swap position. Only the right form panel gets dir={isRTL ? "rtl" : "ltr"}.
  */
 
 const ROLES = [
-  { key: "supplier", label: "Supplier" },
-  { key: "agent", label: "Commission Agent" },
-  { key: "buyer", label: "Buyer" },
+  { key: "supplier", labelKey: "common.roles.supplier" },
+  { key: "agent", labelKey: "common.roles.agent" },
+  { key: "buyer", labelKey: "common.roles.buyer" },
 ];
 
+// orgLabelKey/orgPlaceholderKey point into signup.orgLabel / signup.orgPlaceholder
 const ROLE_ORG_FIELD = {
-  supplier: { name: "orgName", label: "Farm / Business name", placeholder: "e.g. Rehman Farms" },
-  agent: { name: "orgName", label: "Agency name", placeholder: "e.g. Al-Barakah Commission House" },
+  supplier: { name: "orgName", labelKey: "signup.orgLabel.supplier", placeholderKey: "signup.orgPlaceholder.supplier" },
+  agent: { name: "orgName", labelKey: "signup.orgLabel.agent", placeholderKey: "signup.orgPlaceholder.agent" },
   buyer: null,
 };
 
 export default function SignupPage() {
+  const { t, isRTL } = useLanguage();
   const navigate = useNavigate();
   const [role, setRole] = useState("buyer");
   const [showPassword, setShowPassword] = useState(false);
@@ -63,23 +70,23 @@ export default function SignupPage() {
     setError("");
 
     if (!form.fullName || !form.email || !form.phone || !form.password) {
-      setError("Please fill in all required fields.");
+      setError(t("signup.errors.requiredFields"));
       return;
     }
     if (orgField && !form.orgName) {
-      setError(`Please enter your ${orgField.label.toLowerCase()}.`);
+      setError(t("signup.errors.orgRequired", { field: t(orgField.labelKey).toLowerCase() }));
       return;
     }
     if (form.password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setError(t("signup.errors.passwordLength"));
       return;
     }
     if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
+      setError(t("signup.errors.passwordMismatch"));
       return;
     }
     if (!agreed) {
-      setError("Please accept the Terms of Service to continue.");
+      setError(t("signup.errors.termsRequired"));
       return;
     }
 
@@ -90,15 +97,22 @@ export default function SignupPage() {
       await new Promise((res) => setTimeout(res, 700));
       navigate("/login", { replace: true });
     } catch (err) {
-      setError(err?.message || "Something went wrong. Please try again.");
+      setError(err?.message || t("signup.errors.generic"));
     } finally {
       setSubmitting(false);
     }
   }
 
+  const activeRoleLabel = t(ROLES.find((r) => r.key === role).labelKey);
+
   return (
-    <div className="min-h-screen w-full flex bg-[#faf9f5]">
-      {/* LEFT — brand / imagery panel */}
+    <div dir="ltr" className="min-h-screen w-full flex bg-[#faf9f5]">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; }
+      `}</style>
+
+      {/* LEFT — brand / imagery panel. Never moves, never flips. */}
       <div className="hidden lg:flex lg:w-[46%] relative bg-[#1e4620] text-white flex-col justify-between px-14 py-12 overflow-hidden">
         {/* subtle organic texture */}
         <div
@@ -126,44 +140,46 @@ export default function SignupPage() {
           </div>
           <div className="absolute -bottom-2 right-8 h-16 w-16 rounded-full bg-[#3f8f43] border-4 border-[#1e4620] flex flex-col items-center justify-center text-[11px] font-semibold leading-tight text-center shadow-lg">
             <span aria-hidden>🌾</span>
-            <span>New Grower</span>
+            <span>{t("signup.hero.newGrower")}</span>
           </div>
         </div>
 
         <div className="relative">
-          <h1 className="font-serif text-4xl leading-tight mb-4">
-            Join the harvest,
-            <br /> row by row.
+          <h1 className={`text-4xl leading-tight mb-4 ${isRTL ? "font-urdu" : "font-serif"}`}>
+            {t("signup.hero.title1")}
+            <br /> {t("signup.hero.title2")}
           </h1>
           <p className="text-white/80 text-base leading-relaxed max-w-md mb-8">
-            Create your account to track supplies, consignments, and payments
-            in one connected ledger — built for the way wholesale markets
-            actually work.
+            {t("signup.hero.subtitle")}
           </p>
           <div className="flex items-center gap-10">
             <div>
               <div className="text-3xl font-bold">1,200+</div>
-              <div className="text-white/70 text-sm">Consignments tracked</div>
+              <div className="text-white/70 text-sm">{t("common.stats.consignmentsTracked")}</div>
             </div>
             <div className="h-10 w-px bg-white/25" />
             <div>
               <div className="text-3xl font-bold">98%</div>
-              <div className="text-white/70 text-sm">Payment traceability</div>
+              <div className="text-white/70 text-sm">{t("common.stats.paymentTraceability")}</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* RIGHT — signup form panel */}
-      <div className="flex-1 flex items-center justify-center px-6 py-10 sm:px-10">
+      {/* RIGHT — signup form panel. Only this flips to RTL for Urdu. */}
+      <div
+        dir={isRTL ? "rtl" : "ltr"}
+        className="flex-1 flex items-center justify-center px-6 py-10 sm:px-10"
+      >
         <div className="w-full max-w-md">
-          <div className="mb-8">
-            <h2 className="font-serif text-4xl text-[#1e4620] mb-2">
-              Create your account
-            </h2>
-            <p className="text-gray-500">
-              Set up access to manage your market operations.
-            </p>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className={`text-4xl text-[#1e4620] mb-2 ${isRTL ? "font-urdu" : "font-serif"}`}>
+                {t("signup.createAccount")}
+              </h2>
+              <p className="text-gray-500">{t("signup.subtitle")}</p>
+            </div>
+            <LanguageSelector />
           </div>
 
           {/* Role tabs */}
@@ -179,71 +195,76 @@ export default function SignupPage() {
                     : "text-gray-600 hover:text-[#1e4620]"
                 }`}
               >
-                {r.label}
+                {t(r.labelKey)}
               </button>
             ))}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {/* Full name */}
-            <Field label="Full name" required>
+            <Field label={t("signup.fullNameLabel")} required>
               <IconInput
                 icon={<User className="h-4 w-4" />}
                 type="text"
-                placeholder="Your full name"
+                placeholder={t("signup.fullNamePlaceholder")}
                 value={form.fullName}
                 onChange={(v) => updateField("fullName", v)}
                 autoComplete="name"
+                isRTL={isRTL}
               />
             </Field>
 
             {/* Org / farm / agency name — only for supplier & agent */}
             {orgField && (
-              <Field label={orgField.label} required>
+              <Field label={t(orgField.labelKey)} required>
                 <IconInput
                   icon={<Building2 className="h-4 w-4" />}
                   type="text"
-                  placeholder={orgField.placeholder}
+                  placeholder={t(orgField.placeholderKey)}
                   value={form.orgName}
                   onChange={(v) => updateField("orgName", v)}
                   autoComplete="organization"
+                  isRTL={isRTL}
                 />
               </Field>
             )}
 
             {/* Email */}
-            <Field label="Email address" required>
+            <Field label={t("signup.emailLabel")} required>
               <IconInput
                 icon={<Mail className="h-4 w-4" />}
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t("signup.emailPlaceholder")}
                 value={form.email}
                 onChange={(v) => updateField("email", v)}
                 autoComplete="email"
+                isRTL={isRTL}
               />
             </Field>
 
             {/* Phone */}
-            <Field label="Phone number" required>
+            <Field label={t("signup.phoneLabel")} required>
               <IconInput
                 icon={<Phone className="h-4 w-4" />}
                 type="tel"
-                placeholder="03XX XXXXXXX"
+                placeholder={t("signup.phonePlaceholder")}
                 value={form.phone}
                 onChange={(v) => updateField("phone", v)}
                 autoComplete="tel"
+                isRTL={isRTL}
               />
             </Field>
 
             {/* Password */}
-            <Field label="Password" required>
+            <Field label={t("signup.passwordLabel")} required>
               <IconInput
                 icon={<Lock className="h-4 w-4" />}
                 type={showPassword ? "text" : "password"}
-                placeholder="At least 8 characters"
+                placeholder={t("signup.passwordPlaceholder")}
                 value={form.password}
                 onChange={(v) => updateField("password", v)}
                 autoComplete="new-password"
+                isRTL={isRTL}
                 trailing={
                   <button
                     type="button"
@@ -262,14 +283,15 @@ export default function SignupPage() {
             </Field>
 
             {/* Confirm password */}
-            <Field label="Confirm password" required>
+            <Field label={t("signup.confirmPasswordLabel")} required>
               <IconInput
                 icon={<Lock className="h-4 w-4" />}
                 type={showConfirm ? "text" : "password"}
-                placeholder="Re-enter your password"
+                placeholder={t("signup.confirmPasswordPlaceholder")}
                 value={form.confirmPassword}
                 onChange={(v) => updateField("confirmPassword", v)}
                 autoComplete="new-password"
+                isRTL={isRTL}
                 trailing={
                   <button
                     type="button"
@@ -300,10 +322,10 @@ export default function SignupPage() {
                 {agreed && <Check className="h-3 w-3 text-white" />}
               </span>
               <span>
-                I agree to the{" "}
-                <span className="text-[#1e4620] font-medium">Terms of Service</span>{" "}
-                and{" "}
-                <span className="text-[#1e4620] font-medium">Privacy Policy</span>.
+                {t("signup.agreeText")}{" "}
+                <span className="text-[#1e4620] font-medium">{t("signup.termsOfService")}</span>{" "}
+                {t("signup.and")}{" "}
+                <span className="text-[#1e4620] font-medium">{t("signup.privacyPolicy")}</span>.
               </span>
             </label>
 
@@ -318,15 +340,15 @@ export default function SignupPage() {
               disabled={submitting}
               className="w-full bg-[#f0b84c] hover:bg-[#e8ab30] disabled:opacity-60 disabled:cursor-not-allowed text-[#1e4620] font-semibold rounded-xl py-3.5 flex items-center justify-center gap-2 transition-colors"
             >
-              {submitting ? "Creating account…" : `Sign up as ${ROLES.find((r) => r.key === role).label}`}
-              {!submitting && <ArrowRight className="h-4 w-4" />}
+              {submitting ? t("signup.creatingAccount") : t("signup.signUpAs", { role: activeRoleLabel })}
+              {!submitting && <ArrowRight className={`h-4 w-4 ${isRTL ? "rotate-180" : ""}`} />}
             </button>
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-6">
-            Already have an account?{" "}
+            {t("signup.alreadyHaveAccount")}{" "}
             <Link to="/login" className="text-[#1e4620] font-semibold hover:underline">
-              Log in
+              {t("signup.logIn")}
             </Link>
           </p>
         </div>
@@ -346,16 +368,17 @@ function Field({ label, required, children }) {
   );
 }
 
-function IconInput({ icon, trailing, value, onChange, ...props }) {
+function IconInput({ icon, trailing, value, onChange, isRTL, ...props }) {
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3.5 py-3 focus-within:border-[#1e4620] focus-within:ring-2 focus-within:ring-[#1e4620]/10 transition-shadow">
-      <span className="text-gray-400">{icon}</span>
+      {!isRTL && <span className="text-gray-400">{icon}</span>}
       <input
         {...props}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="flex-1 outline-none text-sm text-gray-800 placeholder:text-gray-400 bg-transparent"
       />
+      {isRTL && <span className="text-gray-400">{icon}</span>}
       {trailing}
     </div>
   );

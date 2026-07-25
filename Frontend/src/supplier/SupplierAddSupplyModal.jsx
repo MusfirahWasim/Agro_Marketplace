@@ -10,12 +10,16 @@ import {
   Trash2,
   Sprout,
 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 /**
  * SupplierAddSupplyModal
  * Matches the Modern Organic & Eco-Friendly theme (LoginPage / SignupPage):
  * - Forest green header strip, gold primary CTA, off-white body, rounded-2xl card
  * - Used to add a new entry to the supplier's `supplies` table (available stock)
+ * Fully localized (English / Urdu) via LanguageContext — every label, option,
+ * and error message comes from translation keys, and the dialog switches to
+ * RTL layout + Urdu font automatically.
  *
  * Props:
  *  - open: boolean — whether the modal is visible
@@ -23,29 +27,29 @@ import {
  *  - onSubmit: (supply) => Promise<void> | void — called with the new supply payload
  */
 
-const CATEGORIES = [
-  "Vegetables",
-  "Fruits",
-  "Grains & Cereals",
-  "Pulses",
-  "Spices",
-  "Dairy",
-  "Other",
+const CATEGORY_KEYS = [
+  "vegetables",
+  "fruits",
+  "grainsCereals",
+  "pulses",
+  "spices",
+  "dairy",
+  "other",
 ];
 
-const UNITS = ["kg", "quintal", "ton", "crate", "bag", "dozen"];
+const UNIT_KEYS = ["kg", "quintal", "ton", "crate", "bag", "dozen"];
 
 const GRADES = [
-  { key: "A", label: "Grade A — Premium" },
-  { key: "B", label: "Grade B — Standard" },
-  { key: "C", label: "Grade C — Economy" },
+  { value: "A", key: "a" },
+  { value: "B", key: "b" },
+  { value: "C", key: "c" },
 ];
 
 const initialForm = {
   productName: "",
-  category: CATEGORIES[0],
+  category: CATEGORY_KEYS[0],
   quantity: "",
-  unit: UNITS[0],
+  unit: UNIT_KEYS[0],
   pricePerUnit: "",
   grade: "A",
   harvestDate: "",
@@ -53,6 +57,8 @@ const initialForm = {
 };
 
 export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
+  const { t, language } = useLanguage();
+  const isUr = language === "ur";
   const [form, setForm] = useState(initialForm);
   const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -90,15 +96,15 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
     setError("");
 
     if (!form.productName || !form.quantity || !form.pricePerUnit) {
-      setError("Please fill in product name, quantity, and price per unit.");
+      setError(t("supplier.addSupplyModal.errors.required"));
       return;
     }
     if (Number(form.quantity) <= 0) {
-      setError("Quantity must be greater than zero.");
+      setError(t("supplier.addSupplyModal.errors.quantity"));
       return;
     }
     if (Number(form.pricePerUnit) <= 0) {
-      setError("Price per unit must be greater than zero.");
+      setError(t("supplier.addSupplyModal.errors.price"));
       return;
     }
 
@@ -112,7 +118,7 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
       });
       resetAndClose();
     } catch (err) {
-      setError(err?.message || "Couldn't add supply. Please try again.");
+      setError(err?.message || t("supplier.addSupplyModal.errors.generic"));
     } finally {
       setSubmitting(false);
     }
@@ -124,7 +130,10 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="add-supply-title"
+      dir={isUr ? "rtl" : "ltr"}
+      style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : undefined }}
     >
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-[#1e4620]/40 backdrop-blur-[2px]"
@@ -141,10 +150,10 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
             </div>
             <div>
               <h2 id="add-supply-title" className="font-serif text-xl leading-tight">
-                Add new supply
+                {t("supplier.addSupplyModal.title")}
               </h2>
               <p className="text-white/70 text-xs">
-                Adds stock to your available inventory
+                {t("supplier.addSupplyModal.subtitle")}
               </p>
             </div>
           </div>
@@ -167,7 +176,7 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
           {/* Image upload */}
           <div>
             <label className="block text-sm text-gray-700 mb-1.5">
-              Product photo
+              {t("supplier.addSupplyModal.productPhoto")}
             </label>
             {imagePreview ? (
               <div className="relative w-full h-36 rounded-xl overflow-hidden border border-gray-200">
@@ -188,7 +197,7 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
             ) : (
               <label className="flex flex-col items-center justify-center gap-1.5 w-full h-28 rounded-xl border-2 border-dashed border-gray-300 hover:border-[#1e4620] cursor-pointer text-gray-400 hover:text-[#1e4620] transition-colors">
                 <ImagePlus className="h-6 w-6" />
-                <span className="text-xs">Click to upload a photo</span>
+                <span className="text-xs">{t("supplier.addSupplyModal.clickToUpload")}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -200,11 +209,11 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
           </div>
 
           {/* Product name */}
-          <Field label="Product name" required>
+          <Field label={t("supplier.addSupplyModal.productName")} required>
             <IconInput
               icon={<Package className="h-4 w-4" />}
               type="text"
-              placeholder="e.g. Basmati Rice"
+              placeholder={t("supplier.addSupplyModal.productNamePlaceholder")}
               value={form.productName}
               onChange={(v) => updateField("productName", v)}
             />
@@ -212,27 +221,33 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
 
           {/* Category + Grade */}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Category">
+            <Field label={t("supplier.addSupplyModal.category")}>
               <SelectInput
                 icon={<Tag className="h-4 w-4" />}
                 value={form.category}
                 onChange={(v) => updateField("category", v)}
-                options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+                options={CATEGORY_KEYS.map((k) => ({
+                  value: k,
+                  label: t(`common.categories.${k}`),
+                }))}
               />
             </Field>
-            <Field label="Quality grade">
+            <Field label={t("supplier.addSupplyModal.qualityGrade")}>
               <SelectInput
                 icon={<Sprout className="h-4 w-4" />}
                 value={form.grade}
                 onChange={(v) => updateField("grade", v)}
-                options={GRADES.map((g) => ({ value: g.key, label: g.label }))}
+                options={GRADES.map((g) => ({
+                  value: g.value,
+                  label: t(`supplier.addSupplyModal.grades.${g.key}`),
+                }))}
               />
             </Field>
           </div>
 
           {/* Quantity + Unit */}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Quantity" required>
+            <Field label={t("supplier.addSupplyModal.quantity")} required>
               <IconInput
                 icon={<Scale className="h-4 w-4" />}
                 type="number"
@@ -243,18 +258,21 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
                 onChange={(v) => updateField("quantity", v)}
               />
             </Field>
-            <Field label="Unit">
+            <Field label={t("supplier.addSupplyModal.unit")}>
               <SelectInput
                 value={form.unit}
                 onChange={(v) => updateField("unit", v)}
-                options={UNITS.map((u) => ({ value: u, label: u }))}
+                options={UNIT_KEYS.map((u) => ({
+                  value: u,
+                  label: t(`supplier.addSupplyModal.units.${u}`),
+                }))}
               />
             </Field>
           </div>
 
           {/* Price per unit + Harvest date */}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Price per unit (PKR)" required>
+            <Field label={t("supplier.addSupplyModal.pricePerUnit")} required>
               <IconInput
                 icon={<Banknote className="h-4 w-4" />}
                 type="number"
@@ -265,7 +283,7 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
                 onChange={(v) => updateField("pricePerUnit", v)}
               />
             </Field>
-            <Field label="Harvest date">
+            <Field label={t("supplier.addSupplyModal.harvestDate")}>
               <IconInput
                 icon={<CalendarDays className="h-4 w-4" />}
                 type="date"
@@ -276,10 +294,10 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
           </div>
 
           {/* Notes */}
-          <Field label="Notes (optional)">
+          <Field label={t("supplier.addSupplyModal.notes")}>
             <textarea
               rows={3}
-              placeholder="Storage conditions, batch details, or anything an agent should know…"
+              placeholder={t("supplier.addSupplyModal.notesPlaceholder")}
               value={form.notes}
               onChange={(e) => updateField("notes", e.target.value)}
               className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-[#1e4620] focus:ring-2 focus:ring-[#1e4620]/10 transition-shadow resize-none"
@@ -301,7 +319,7 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
             disabled={submitting}
             className="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-60 transition-colors"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -309,7 +327,7 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
             disabled={submitting}
             className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#f0b84c] hover:bg-[#e8ab30] disabled:opacity-60 disabled:cursor-not-allowed text-[#1e4620] transition-colors"
           >
-            {submitting ? "Adding…" : "Add supply"}
+            {submitting ? t("supplier.addSupplyModal.adding") : t("supplier.addSupplyModal.addSupply")}
           </button>
         </div>
       </div>

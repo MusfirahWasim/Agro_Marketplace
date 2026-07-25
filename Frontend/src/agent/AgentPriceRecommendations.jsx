@@ -10,27 +10,16 @@ import {
   ArrowDownRight,
   Minus,
 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import LanguageSelector from "../i18n/LanguageSelector";
+import { localizeProduct, localizeReason, formatAgentCurrency } from "./agentLocale";
 
 /**
  * AgentPriceRecommendations.jsx
  * Commission Agent — AI-suggested pricing per product based on recent
  * demand and market movement, to help the agent price consigned stock
- * competitively while protecting margin.
- *
- * Styling note: this file uses plain inline styles (same approach as the
- * other agent pages — AgentInventory.jsx, AgentCommissions.jsx,
- * AgentSettlements.jsx, AgentConsignmentIntake.jsx) instead of Tailwind
- * classes, so the theme renders correctly even if Tailwind isn't set
- * up/scanning this file yet.
- *
- * Palette (sampled from the dashboard reference screenshot):
- *  - Page background   #faf8f2
- *  - Card background    #ffffff
- *  - Card border         #ece8de
- *  - Deep forest green   #1e4620
- *  - Sage/leaf green     #4c8b3c
- *  - Honey gold          #f0b84c
- *  - Heading text        #16211a
+ * competitively while protecting margin. Fully localized (English / Urdu),
+ * including product names and AI reasoning text.
  *
  * Data below is illustrative — swap MOCK_RECOMMENDATIONS for a call to
  * lib/api.js (e.g. getAgentPriceRecommendations()) once the AI insights
@@ -60,20 +49,7 @@ const MOCK_RECOMMENDATIONS = [
   { id: "REC-07", product: "Mangoes (Sindhri)", currentPrice: 165, recommendedPrice: 149, trend: "down", confidence: "medium", reason: "Season peak — supply increasing fast" },
 ];
 
-const TREND_META = {
-  up: { label: "Rising", icon: ArrowUpRight, color: "#4b6b3f", bg: "#dde8d0" },
-  down: { label: "Falling", icon: ArrowDownRight, color: "#b15a41", bg: "#f4d9d0" },
-  flat: { label: "Stable", icon: Minus, color: "#8a6413", bg: "#f5e6c5" },
-};
-
-const CONFIDENCE_META = {
-  high: { label: "High confidence", text: "#4b6b3f", bg: "#dde8d0" },
-  medium: { label: "Medium confidence", text: "#8a6413", bg: "#f5e6c5" },
-  low: { label: "Low confidence", text: "#8b948d", bg: "#f1efe9" },
-};
-
-function TrendBadge({ trend }) {
-  const meta = TREND_META[trend];
+function TrendBadge({ meta }) {
   const Icon = meta.icon;
   return (
     <span
@@ -95,8 +71,7 @@ function TrendBadge({ trend }) {
   );
 }
 
-function ConfidenceBadge({ confidence }) {
-  const meta = CONFIDENCE_META[confidence];
+function ConfidenceBadge({ meta }) {
   return (
     <span
       style={{
@@ -149,8 +124,24 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
 }
 
 export default function AgentPriceRecommendations() {
+  const { language, t } = useLanguage();
+  const isUr = language === "ur";
+  const product = (name) => localizeProduct(name, language);
+  const reason = (text) => localizeReason(text, language);
   const [query, setQuery] = useState("");
   const [trendFilter, setTrendFilter] = useState("all");
+
+  const TREND_META = {
+    up: { label: t("agent.priceRecommendations.trend.up"), icon: ArrowUpRight, color: "#4b6b3f", bg: "#dde8d0" },
+    down: { label: t("agent.priceRecommendations.trend.down"), icon: ArrowDownRight, color: "#b15a41", bg: "#f4d9d0" },
+    flat: { label: t("agent.priceRecommendations.trend.flat"), icon: Minus, color: "#8a6413", bg: "#f5e6c5" },
+  };
+
+  const CONFIDENCE_META = {
+    high: { label: t("agent.priceRecommendations.confidenceLabel.high"), text: "#4b6b3f", bg: "#dde8d0" },
+    medium: { label: t("agent.priceRecommendations.confidenceLabel.medium"), text: "#8a6413", bg: "#f5e6c5" },
+    low: { label: t("agent.priceRecommendations.confidenceLabel.low"), text: "#8b948d", bg: "#f1efe9" },
+  };
 
   const rows = useMemo(
     () =>
@@ -165,11 +156,11 @@ export default function AgentPriceRecommendations() {
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const q = query.toLowerCase();
-      const matchesQuery = r.product.toLowerCase().includes(q);
+      const matchesQuery = r.product.toLowerCase().includes(q) || product(r.product).includes(query);
       const matchesTrend = trendFilter === "all" || r.trend === trendFilter;
       return matchesQuery && matchesTrend;
     });
-  }, [rows, query, trendFilter]);
+  }, [rows, query, trendFilter, language]);
 
   const totals = useMemo(() => {
     const risingCount = rows.filter((r) => r.trend === "up").length;
@@ -191,23 +182,27 @@ export default function AgentPriceRecommendations() {
   const tdStyle = { padding: "16px 20px", fontSize: 14, color: "#33403a" };
 
   return (
-    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "system-ui, -apple-system, sans-serif" }} dir={isUr ? "rtl" : "ltr"}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         {/* Page header */}
-        <div>
-          <h1
-            style={{
-              fontFamily: "Georgia, 'Times New Roman', serif",
-              fontSize: 30,
-              color: COLORS.heading,
-              margin: 0,
-            }}
-          >
-            Price recommendations
-          </h1>
-          <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
-            AI-suggested pricing based on recent demand and market movement across your consignments.
-          </p>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h1
+              style={{
+                fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, 'Times New Roman', serif",
+                fontSize: 30,
+                color: COLORS.heading,
+                margin: 0,
+              }}
+            >
+              {t("agent.priceRecommendations.title")}
+            </h1>
+            <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
+              {t("agent.priceRecommendations.subtitle")}
+            </p>
+          </div>
+          <LanguageSelector />
         </div>
 
         {/* Stat cards */}
@@ -218,10 +213,10 @@ export default function AgentPriceRecommendations() {
             gap: 20,
           }}
         >
-          <StatCard icon={TrendingUp} label="Products trending up" value={totals.risingCount} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={TrendingDown} label="Products trending down" value={totals.fallingCount} iconBg="#e8cdc2" iconColor="#b15a41" />
-          <StatCard icon={Target} label="High-confidence calls" value={totals.highConfidence} iconBg="#f6ddab" iconColor="#c9922c" />
-          <StatCard icon={Sparkles} label="Avg. suggested change" value={`${totals.avgUplift > 0 ? "+" : ""}${totals.avgUplift}%`} iconBg="#dde8d0" iconColor={COLORS.sage} />
+          <StatCard icon={TrendingUp} label={t("agent.priceRecommendations.stats.trendingUp")} value={totals.risingCount} iconBg="#dde8d0" iconColor={COLORS.sage} />
+          <StatCard icon={TrendingDown} label={t("agent.priceRecommendations.stats.trendingDown")} value={totals.fallingCount} iconBg="#e8cdc2" iconColor="#b15a41" />
+          <StatCard icon={Target} label={t("agent.priceRecommendations.stats.highConfidence")} value={totals.highConfidence} iconBg="#f6ddab" iconColor="#c9922c" />
+          <StatCard icon={Sparkles} label={t("agent.priceRecommendations.stats.avgSuggestedChange")} value={`${totals.avgUplift > 0 ? "+" : ""}${totals.avgUplift}%`} iconBg="#dde8d0" iconColor={COLORS.sage} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
@@ -246,8 +241,8 @@ export default function AgentPriceRecommendations() {
                 flexWrap: "wrap",
               }}
             >
-              <h2 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                Suggested pricing
+              <h2 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+                {t("agent.priceRecommendations.suggestedPricing")}
               </h2>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div
@@ -264,7 +259,7 @@ export default function AgentPriceRecommendations() {
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search product"
+                    placeholder={t("agent.common.searchProduct")}
                     style={{
                       border: "none",
                       outline: "none",
@@ -289,10 +284,10 @@ export default function AgentPriceRecommendations() {
                       background: "#fff",
                     }}
                   >
-                    <option value="all">All trends</option>
-                    <option value="up">Rising</option>
-                    <option value="down">Falling</option>
-                    <option value="flat">Stable</option>
+                    <option value="all">{t("agent.common.allTrends")}</option>
+                    <option value="up">{t("agent.priceRecommendations.trend.up")}</option>
+                    <option value="down">{t("agent.priceRecommendations.trend.down")}</option>
+                    <option value="flat">{t("agent.priceRecommendations.trend.flat")}</option>
                   </select>
                   <ChevronDown
                     size={16}
@@ -307,40 +302,40 @@ export default function AgentPriceRecommendations() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th style={thStyle}>Product</th>
-                    <th style={thStyle}>Current price</th>
-                    <th style={thStyle}>Recommended</th>
-                    <th style={thStyle}>Change</th>
-                    <th style={thStyle}>Trend</th>
-                    <th style={thStyle}>Confidence</th>
+                    <th style={thStyle}>{t("agent.common.table.product")}</th>
+                    <th style={thStyle}>{t("agent.common.table.currentPrice")}</th>
+                    <th style={thStyle}>{t("agent.common.table.recommended")}</th>
+                    <th style={thStyle}>{t("agent.common.table.change")}</th>
+                    <th style={thStyle}>{t("agent.common.table.trend")}</th>
+                    <th style={thStyle}>{t("agent.common.table.confidence")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((r) => (
                     <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
                       <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>
-                        {r.product}
+                        {product(r.product)}
                         <div style={{ marginTop: 2, fontSize: 12, fontWeight: 400, color: COLORS.mutedText }}>
-                          {r.reason}
+                          {reason(r.reason)}
                         </div>
                       </td>
-                      <td style={tdStyle}>Rs {r.currentPrice}</td>
-                      <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>Rs {r.recommendedPrice}</td>
+                      <td style={tdStyle}>{formatAgentCurrency(r.currentPrice, t)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>{formatAgentCurrency(r.recommendedPrice, t)}</td>
                       <td style={{ ...tdStyle, color: r.delta > 0 ? "#4b6b3f" : r.delta < 0 ? "#b15a41" : COLORS.mutedText }}>
                         {r.delta > 0 ? "+" : ""}{r.delta} ({r.deltaPct > 0 ? "+" : ""}{r.deltaPct}%)
                       </td>
                       <td style={tdStyle}>
-                        <TrendBadge trend={r.trend} />
+                        <TrendBadge meta={TREND_META[r.trend]} />
                       </td>
                       <td style={tdStyle}>
-                        <ConfidenceBadge confidence={r.confidence} />
+                        <ConfidenceBadge meta={CONFIDENCE_META[r.confidence]} />
                       </td>
                     </tr>
                   ))}
                   {filtered.length === 0 && (
                     <tr>
                       <td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: COLORS.mutedText }}>
-                        No products match your search.
+                        {t("agent.priceRecommendations.noResults")}
                       </td>
                     </tr>
                   )}
@@ -355,19 +350,19 @@ export default function AgentPriceRecommendations() {
             <div style={{ borderRadius: 16, background: COLORS.forest, padding: 24, color: "#fff" }}>
               <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
                 <Sparkles size={20} color={COLORS.gold} />
-                <h3 style={{ fontFamily: "Georgia, serif", fontSize: 18, margin: 0 }}>Top opportunities</h3>
+                <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, margin: 0 }}>{t("agent.priceRecommendations.topOpportunities")}</h3>
               </div>
               {topOpportunities.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {topOpportunities.map((r) => (
                     <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{r.product}</span>
+                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{product(r.product)}</span>
                       <span style={{ fontWeight: 600 }}>+{r.deltaPct}%</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>No upward opportunities right now.</p>
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>{t("agent.priceRecommendations.noUpward")}</p>
               )}
               <button
                 style={{
@@ -385,7 +380,7 @@ export default function AgentPriceRecommendations() {
                 onMouseOver={(e) => (e.currentTarget.style.background = COLORS.goldHover)}
                 onMouseOut={(e) => (e.currentTarget.style.background = COLORS.gold)}
               >
-                Apply suggested prices
+                {t("agent.priceRecommendations.applySuggestedPrices")}
               </button>
             </div>
 
@@ -399,13 +394,11 @@ export default function AgentPriceRecommendations() {
                 boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
               }}
             >
-              <h3 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                How this works
+              <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+                {t("agent.priceRecommendations.howThisWorks")}
               </h3>
               <p style={{ marginTop: 12, fontSize: 13, color: COLORS.bodyText, lineHeight: 1.6 }}>
-                Recommendations are based on recent sale velocity, nearby market prices, and
-                current stock levels across your consignments. Higher confidence means more
-                recent sales data was available for that product.
+                {t("agent.priceRecommendations.howThisWorksBody")}
               </p>
             </div>
           </div>

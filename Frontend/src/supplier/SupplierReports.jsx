@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLanguage } from "../i18n/LanguageContext";
 import {
   Sparkles,
   TrendingUp,
@@ -30,60 +31,35 @@ import {
  * Matches the Modern Organic & Eco-Friendly theme:
  * - Off-white background, forest-green + gold accents
  * - "AI generated" badges on insight cards to distinguish model output from raw data
+ * Fully localized (English / Urdu) via LanguageContext — chart week labels,
+ * product filter, and all AI insight text come from translation keys.
  */
 
-const PRODUCTS = ["All products", "Basmati Rice", "Red Onion", "Wheat", "Tomato"];
+const PRODUCTS = ["all", "basmatiRice", "redOnion", "wheat", "tomato"];
 
 // TODO: replace with real output from the AI forecasting service
+// (week is a number here; the display label is localized at render time)
 const DEMAND_FORECAST = [
-  { week: "Wk 1", actual: 420, forecast: 400 },
-  { week: "Wk 2", actual: 460, forecast: 445 },
-  { week: "Wk 3", actual: 510, forecast: 500 },
-  { week: "Wk 4", actual: null, forecast: 560 },
-  { week: "Wk 5", actual: null, forecast: 605 },
-  { week: "Wk 6", actual: null, forecast: 640 },
+  { week: 1, actual: 420, forecast: 400 },
+  { week: 2, actual: 460, forecast: 445 },
+  { week: 3, actual: 510, forecast: 500 },
+  { week: 4, actual: null, forecast: 560 },
+  { week: 5, actual: null, forecast: 605 },
+  { week: 6, actual: null, forecast: 640 },
 ];
 
 const PRICE_TREND = [
-  { week: "Wk 1", market: 285, yours: 280 },
-  { week: "Wk 2", market: 292, yours: 280 },
-  { week: "Wk 3", market: 305, yours: 290 },
-  { week: "Wk 4", market: 310, yours: 290 },
+  { week: 1, market: 285, yours: 280 },
+  { week: 2, market: 292, yours: 280 },
+  { week: 3, market: 305, yours: 290 },
+  { week: 4, market: 310, yours: 290 },
 ];
 
 const INSIGHTS = [
-  {
-    id: 1,
-    type: "opportunity",
-    title: "Demand for Basmati Rice rising ahead of Eid",
-    body:
-      "Forecasted demand climbs roughly 40% over the next 3 weeks. Consigning additional stock now could capture higher-than-average agent uptake.",
-    tag: "Demand forecast",
-  },
-  {
-    id: 2,
-    type: "price",
-    title: "Your Red Onion price sits below market average",
-    body:
-      "Market price has moved to PKR 310/kg while your last consignment priced at PKR 290/kg. Consider adjusting your next batch closer to market rate.",
-    tag: "Price recommendation",
-  },
-  {
-    id: 3,
-    type: "warning",
-    title: "Wheat consignment sitting unsold for 8 days",
-    body:
-      "CSN-1039 with Al-Barakah Commission House has had no sales activity. Reach out to your agent or consider reallocating to a faster-moving agent.",
-    tag: "Inventory alert",
-  },
-  {
-    id: 4,
-    type: "opportunity",
-    title: "Tomato sell-through improving with Green Valley Agents",
-    body:
-      "This agent has sold 60% of your last consignment within 5 days, faster than your 12-day average. Prioritizing them for perishables may reduce spoilage risk.",
-    tag: "Business insight",
-  },
+  { id: 1, type: "opportunity" },
+  { id: 2, type: "price" },
+  { id: 3, type: "warning" },
+  { id: 4, type: "opportunity" },
 ];
 
 const INSIGHT_STYLES = {
@@ -102,7 +78,19 @@ const INSIGHT_STYLES = {
 };
 
 export default function SupplierReports() {
+  const { t, language } = useLanguage();
+  const isUr = language === "ur";
   const [product, setProduct] = useState(PRODUCTS[0]);
+
+  const weekLabel = (n) => (isUr ? `ہفتہ ${n}` : `Wk ${n}`);
+  const demandData = useMemo(
+    () => DEMAND_FORECAST.map((d) => ({ ...d, weekLabel: weekLabel(d.week) })),
+    [isUr]
+  );
+  const priceData = useMemo(
+    () => PRICE_TREND.map((d) => ({ ...d, weekLabel: weekLabel(d.week) })),
+    [isUr]
+  );
 
   const forecastNote = useMemo(() => {
     const last = DEMAND_FORECAST[DEMAND_FORECAST.length - 1].forecast;
@@ -112,20 +100,20 @@ export default function SupplierReports() {
   }, []);
 
   return (
-    <div className="min-h-full bg-[#faf9f5] px-6 py-8 sm:px-8">
+    <div className="min-h-full bg-[#faf9f5] px-6 py-8 sm:px-8" dir={isUr ? "rtl" : "ltr"} style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : undefined }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
         <div>
           <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#8a5a12] bg-[#f0b84c]/20 border border-[#f0b84c]/40 rounded-full px-2.5 py-1 mb-2.5">
             <Sparkles className="h-3 w-3" />
-            AI-powered
+            {t("supplier.reports.aiPowered")}
           </div>
           <h1 className="font-serif text-3xl text-[#1e4620] mb-1.5">
-            Reports &amp; insights
+            {t("supplier.reports.title")}
           </h1>
           <p className="text-gray-500">
-            Demand forecasts, price recommendations, and inventory insights
-            for your products.
+            {t("supplier.reports.subtitle")}
           </p>
         </div>
 
@@ -138,7 +126,7 @@ export default function SupplierReports() {
           >
             {PRODUCTS.map((p) => (
               <option key={p} value={p}>
-                {p}
+                {t(`supplier.reports.products.${p}`)}
               </option>
             ))}
           </select>
@@ -153,10 +141,10 @@ export default function SupplierReports() {
           <div className="flex items-start justify-between mb-1">
             <div>
               <h2 className="font-serif text-lg text-[#1e4620]">
-                Demand forecast
+                {t("supplier.reports.demandForecast")}
               </h2>
               <p className="text-sm text-gray-500">
-                Actual sales vs. AI-projected demand, next 3 weeks
+                {t("supplier.reports.actualVsForecast")}
               </p>
             </div>
             <span
@@ -177,9 +165,9 @@ export default function SupplierReports() {
           </div>
           <div className="h-64 mt-4">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={DEMAND_FORECAST}>
+              <LineChart data={demandData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                <XAxis dataKey="week" tick={{ fontSize: 12, fill: "#6b7280" }} />
+                <XAxis dataKey="weekLabel" tick={{ fontSize: 12, fill: "#6b7280" }} />
                 <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} />
                 <Tooltip
                   contentStyle={{
@@ -192,7 +180,7 @@ export default function SupplierReports() {
                 <Line
                   type="monotone"
                   dataKey="actual"
-                  name="Actual (kg)"
+                  name={t("supplier.reports.actualSalesKg")}
                   stroke="#1e4620"
                   strokeWidth={2.5}
                   dot={{ r: 3 }}
@@ -201,7 +189,7 @@ export default function SupplierReports() {
                 <Line
                   type="monotone"
                   dataKey="forecast"
-                  name="Forecast (kg)"
+                  name={t("supplier.reports.forecastKg")}
                   stroke="#f0b84c"
                   strokeWidth={2.5}
                   strokeDasharray="5 4"
@@ -215,16 +203,16 @@ export default function SupplierReports() {
         {/* Price trend */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6">
           <h2 className="font-serif text-lg text-[#1e4620]">
-            Price benchmarking
+            {t("supplier.reports.priceBenchmarking")}
           </h2>
           <p className="text-sm text-gray-500 mb-4">
-            Your average consignment price vs. market average (PKR/kg)
+            {t("supplier.reports.priceSubtitle")}
           </p>
           <div className="h-64 mt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={PRICE_TREND}>
+              <BarChart data={priceData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                <XAxis dataKey="week" tick={{ fontSize: 12, fill: "#6b7280" }} />
+                <XAxis dataKey="weekLabel" tick={{ fontSize: 12, fill: "#6b7280" }} />
                 <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} />
                 <Tooltip
                   contentStyle={{
@@ -234,8 +222,8 @@ export default function SupplierReports() {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="yours" name="Your price" fill="#1e4620" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="market" name="Market average" fill="#f0b84c" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="yours" name={t("supplier.reports.yourPrice")} fill="#1e4620" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="market" name={t("supplier.reports.marketAverage")} fill="#f0b84c" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -246,7 +234,7 @@ export default function SupplierReports() {
       <div className="mb-4 flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-[#8a5a12]" />
         <h2 className="font-serif text-lg text-[#1e4620]">
-          Insights for you
+          {t("supplier.reports.insightsForYou")}
         </h2>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -262,20 +250,20 @@ export default function SupplierReports() {
                   className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${style.color}`}
                 >
                   {style.icon}
-                  {insight.tag}
+                  {t(`supplier.reports.insights.${insight.id}.tag`)}
                 </span>
               </div>
               <h3 className="font-medium text-[#1e4620] leading-snug">
-                {insight.title}
+                {t(`supplier.reports.insights.${insight.id}.title`)}
               </h3>
               <p className="text-sm text-gray-500 leading-relaxed">
-                {insight.body}
+                {t(`supplier.reports.insights.${insight.id}.body`)}
               </p>
               <button
                 type="button"
                 className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-[#1e4620] hover:gap-2.5 transition-all self-start"
               >
-                View details
+                {t("common.viewDetails")}
                 <ArrowRight className="h-3.5 w-3.5" />
               </button>
             </div>
