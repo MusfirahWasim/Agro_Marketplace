@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import engine
+from app.routers import auth
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,8 +45,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# No routers included yet — add each one back in as it's built,
-# e.g. app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(auth.router)
+
 
 @app.get("/health")
 async def health():
