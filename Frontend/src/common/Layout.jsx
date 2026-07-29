@@ -11,13 +11,15 @@ import {
   LogOut,
   Bell,
   Menu,
-  X,
   Truck,
+  X,
   Boxes,
   Percent,
   Landmark,
   Sparkles,
 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import LanguageSelector from "../i18n/LanguageSelector";
 
 const COLORS = {
   forest: "#1e4620",
@@ -33,40 +35,40 @@ const COLORS = {
 const NAV_CONFIG = {
   supplier: {
     name: "Ahmed Farms",
-    subtitle: "Supplier",
+    subtitleKey: "common.roles.supplier",
     links: [
-      { to: "/supplier/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/supplier/supplies", label: "My supplies", icon: Sprout },
-      { to: "/supplier/profile", label: "Profile", icon: User },
+      { to: "/supplier/dashboard", labelKey: "common.nav.dashboard", icon: LayoutDashboard },
+      { to: "/supplier/supplies", labelKey: "common.nav.mySupplies", icon: Sprout },
+      { to: "/supplier/profile", labelKey: "common.nav.profile", icon: User },
     ],
   },
   agent: {
     name: "Rafiq Traders",
-    subtitle: "Commission Agent",
+    subtitleKey: "common.roles.agent",
     links: [
-      { to: "/agent/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/agent/orders", label: "Orders", icon: ClipboardList },
-      { to: "/agent/profile", label: "Profile", icon: User },
-      { to: "/agent/inventory", label: "Inventory", icon: Boxes },
-      { to: "/agent/commissions", label: "Commissions", icon: Percent },
-      { to: "/agent/settlements", label: "Settlements", icon: Landmark },
-      { to: "/agent/price-recommendations", label: "Price Insights", icon: Sparkles },
+      { to: "/agent/dashboard", labelKey: "common.nav.dashboard", icon: LayoutDashboard },
+      { to: "/agent/orders", labelKey: "common.nav.orders", icon: ClipboardList },
+      { to: "/agent/profile", labelKey: "common.nav.profile", icon: User },
+      { to: "/agent/inventory", labelKey: "common.nav.inventory", icon: Boxes },
+      { to: "/agent/commissions", labelKey: "common.nav.commissions", icon: Percent },
+      { to: "/agent/settlements", labelKey: "common.nav.settlements", icon: Landmark },
+      { to: "/agent/price-recommendations", labelKey: "common.nav.priceInsights", icon: Sparkles },
     ],
   },
-  
   buyer: {
     name: "Green Valley Store",
-    subtitle: "Buyer",
+    subtitleKey: "common.roles.buyer",
     links: [
-      { to: "/buyer/marketplace", label: "Marketplace", icon: Store },
-      { to: "/buyer/orders", label: "My orders", icon: ShoppingCart },
-      { to: "/buyer/profile", label: "Profile", icon: User },
+      { to: "/buyer/marketplace", labelKey: "common.nav.marketplace", icon: Store },
+      { to: "/buyer/orders", labelKey: "common.nav.myOrders", icon: ShoppingCart },
+      { to: "/buyer/profile", labelKey: "common.nav.profile", icon: User },
     ],
   },
 };
 
 export default function Layout({ role }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const config = NAV_CONFIG[role] || NAV_CONFIG.supplier;
 
@@ -127,7 +129,7 @@ export default function Layout({ role }) {
                 }
               >
                 <link.icon size={17} />
-                {link.label}
+                {t(link.labelKey)}
               </NavLink>
             ))}
           </nav>
@@ -140,7 +142,7 @@ export default function Layout({ role }) {
             style={{ color: "#c9d9c2" }}
           >
             <LogOut size={17} />
-            Log out
+            {t("common.logout")}
           </button>
         </div>
       </aside>
@@ -172,6 +174,7 @@ export default function Layout({ role }) {
           <div className="hidden md:block" />
 
           <div className="flex items-center gap-4">
+            <LanguageSelector />
             <button className="relative">
               <Bell size={19} color={COLORS.sub} />
               <span
@@ -195,7 +198,7 @@ export default function Layout({ role }) {
                   {config.name}
                 </p>
                 <p className="text-xs" style={{ color: COLORS.sub }}>
-                  {config.subtitle}
+                  {t(config.subtitleKey)}
                 </p>
               </div>
             </div>

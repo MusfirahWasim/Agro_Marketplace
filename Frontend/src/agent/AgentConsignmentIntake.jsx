@@ -7,25 +7,15 @@ import {
   ChevronDown,
   Search,
 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import LanguageSelector from "../i18n/LanguageSelector";
+import { localizeTrader, localizeProduct, formatAgentDate } from "./agentLocale";
 
 /**
  * AgentConsignmentIntake.jsx
  * Commission Agent — recording stock received from suppliers (new consignments
- * coming into the agent's inventory).
- *
- * Styling note: this file uses plain inline styles (same approach as
- * AgentInventory.jsx / AgentCommissions.jsx / AgentSettlements.jsx) instead
- * of Tailwind classes, so the theme renders correctly even if Tailwind
- * isn't set up/scanning this file yet.
- *
- * Palette (sampled from the dashboard reference screenshot):
- *  - Page background   #faf8f2
- *  - Card background    #ffffff
- *  - Card border         #ece8de
- *  - Deep forest green   #1e4620
- *  - Sage/leaf green     #4c8b3c
- *  - Honey gold          #f0b84c
- *  - Heading text        #16211a
+ * coming into the agent's inventory). Fully localized (English / Urdu),
+ * including supplier and product names and dates.
  *
  * Data below is illustrative — wire the form's onSubmit to lib/api.js
  * (e.g. createConsignmentIntake()) and swap MOCK_INTAKES for
@@ -48,22 +38,15 @@ const COLORS = {
 const SUPPLIERS = ["Ahmed Farms", "Noor Agro", "Green Basket Growers", "Bilal Supplies"];
 
 const MOCK_INTAKES = [
-  { id: "CN-1042", supplier: "Ahmed Farms", product: "Tomatoes", quantity: 1200, unit: "kg", unitPrice: 85, date: "2026-07-14", status: "confirmed" },
-  { id: "CN-1041", supplier: "Noor Agro", product: "Basmati Rice", quantity: 2400, unit: "kg", unitPrice: 210, date: "2026-07-12", status: "confirmed" },
-  { id: "CN-1039", supplier: "Green Basket Growers", product: "Red Onions", quantity: 900, unit: "kg", unitPrice: 60, date: "2026-07-10", status: "confirmed" },
-  { id: "CN-1044", supplier: "Bilal Supplies", product: "Green Chillies", quantity: 400, unit: "kg", unitPrice: 145, date: "2026-07-19", status: "pending" },
-  { id: "CN-1045", supplier: "Ahmed Farms", product: "Potatoes", quantity: 1100, unit: "kg", unitPrice: 46, date: "2026-07-20", status: "pending" },
-  { id: "CN-1033", supplier: "Noor Agro", product: "Wheat", quantity: 3000, unit: "kg", unitPrice: 98, date: "2026-07-02", status: "confirmed" },
+  { id: "CN-1042", supplier: "Ahmed Farms", product: "Tomatoes", quantity: 1200, unitPrice: 85, date: "2026-07-14", status: "confirmed" },
+  { id: "CN-1041", supplier: "Noor Agro", product: "Basmati Rice", quantity: 2400, unitPrice: 210, date: "2026-07-12", status: "confirmed" },
+  { id: "CN-1039", supplier: "Green Basket Growers", product: "Red Onions", quantity: 900, unitPrice: 60, date: "2026-07-10", status: "confirmed" },
+  { id: "CN-1044", supplier: "Bilal Supplies", product: "Green Chillies", quantity: 400, unitPrice: 145, date: "2026-07-19", status: "pending" },
+  { id: "CN-1045", supplier: "Ahmed Farms", product: "Potatoes", quantity: 1100, unitPrice: 46, date: "2026-07-20", status: "pending" },
+  { id: "CN-1033", supplier: "Noor Agro", product: "Wheat", quantity: 3000, unitPrice: 98, date: "2026-07-02", status: "confirmed" },
 ];
 
-const STATUS_META = {
-  confirmed: { label: "Confirmed", dot: "#4c8b3c", text: "#4b6b3f", bg: "#dde8d0" },
-  pending: { label: "Awaiting confirmation", dot: "#f0b84c", text: "#8a6413", bg: "#f5e6c5" },
-  rejected: { label: "Rejected", dot: "#b15a41", text: "#b15a41", bg: "#f4d9d0" },
-};
-
-function StatusBadge({ status }) {
-  const meta = STATUS_META[status];
+function StatusBadge({ meta }) {
   return (
     <span
       style={{
@@ -131,10 +114,22 @@ const inputStyle = {
 };
 
 export default function AgentConsignmentIntake() {
+  const { language, t } = useLanguage();
+  const isUr = language === "ur";
+  const unit = isUr ? "کلوگرام" : "kg";
+  const trader = (name) => localizeTrader(name, language);
+  const product = (name) => localizeProduct(name, language);
+
+  const STATUS_META = {
+    confirmed: { label: t("agent.common.status.confirmed"), dot: "#4c8b3c", text: "#4b6b3f", bg: "#dde8d0" },
+    pending: { label: t("agent.common.status.awaitingConfirmation"), dot: "#f0b84c", text: "#8a6413", bg: "#f5e6c5" },
+    rejected: { label: t("agent.common.status.rejected"), dot: "#b15a41", text: "#b15a41", bg: "#f4d9d0" },
+  };
+
   const [intakes, setIntakes] = useState(MOCK_INTAKES);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [form, setForm] = useState({ supplier: SUPPLIERS[0], product: "", quantity: "", unit: "kg", unitPrice: "" });
+  const [form, setForm] = useState({ supplier: SUPPLIERS[0], product: "", quantity: "", unitPrice: "" });
   const [submitted, setSubmitted] = useState(false);
 
   const filtered = useMemo(() => {
@@ -142,12 +137,14 @@ export default function AgentConsignmentIntake() {
       const q = query.toLowerCase();
       const matchesQuery =
         r.product.toLowerCase().includes(q) ||
+        product(r.product).includes(query) ||
         r.supplier.toLowerCase().includes(q) ||
+        trader(r.supplier).includes(query) ||
         r.id.toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || r.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [intakes, query, statusFilter]);
+  }, [intakes, query, statusFilter, language]);
 
   const totals = useMemo(() => {
     const totalQty = intakes.reduce((s, r) => s + r.quantity, 0);
@@ -172,13 +169,12 @@ export default function AgentConsignmentIntake() {
       supplier: form.supplier,
       product: form.product,
       quantity: Number(form.quantity),
-      unit: form.unit,
       unitPrice: Number(form.unitPrice),
       date: new Date().toISOString().slice(0, 10),
       status: "pending",
     };
     setIntakes((prev) => [newIntake, ...prev]);
-    setForm({ supplier: SUPPLIERS[0], product: "", quantity: "", unit: "kg", unitPrice: "" });
+    setForm({ supplier: SUPPLIERS[0], product: "", quantity: "", unitPrice: "" });
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 2500);
   }
@@ -187,23 +183,27 @@ export default function AgentConsignmentIntake() {
   const tdStyle = { padding: "16px 20px", fontSize: 14, color: "#33403a" };
 
   return (
-    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "system-ui, -apple-system, sans-serif" }} dir={isUr ? "rtl" : "ltr"}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         {/* Page header */}
-        <div>
-          <h1
-            style={{
-              fontFamily: "Georgia, 'Times New Roman', serif",
-              fontSize: 30,
-              color: COLORS.heading,
-              margin: 0,
-            }}
-          >
-            Consignment intake
-          </h1>
-          <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
-            Record new stock as it arrives from suppliers, and track what's still awaiting confirmation.
-          </p>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h1
+              style={{
+                fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, 'Times New Roman', serif",
+                fontSize: 30,
+                color: COLORS.heading,
+                margin: 0,
+              }}
+            >
+              {t("agent.consignmentIntake.title")}
+            </h1>
+            <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
+              {t("agent.consignmentIntake.subtitle")}
+            </p>
+          </div>
+          <LanguageSelector />
         </div>
 
         {/* Stat cards */}
@@ -214,10 +214,10 @@ export default function AgentConsignmentIntake() {
             gap: 20,
           }}
         >
-          <StatCard icon={Truck} label="Received this month" value={totals.thisMonth} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={PackagePlus} label="Total quantity intake" value={`${totals.totalQty.toLocaleString()} kg`} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={ClipboardCheck} label="Awaiting confirmation" value={totals.pendingCount} iconBg="#f6ddab" iconColor="#c9922c" />
-          <StatCard icon={Users} label="Active suppliers" value={totals.activeSuppliers} iconBg="#e8cdc2" iconColor="#b15a41" />
+          <StatCard icon={Truck} label={t("agent.consignmentIntake.stats.receivedThisMonth")} value={totals.thisMonth} iconBg="#dde8d0" iconColor={COLORS.sage} />
+          <StatCard icon={PackagePlus} label={t("agent.consignmentIntake.stats.totalQuantityIntake")} value={`${totals.totalQty.toLocaleString()} ${unit}`} iconBg="#dde8d0" iconColor={COLORS.sage} />
+          <StatCard icon={ClipboardCheck} label={t("agent.consignmentIntake.stats.awaitingConfirmation")} value={totals.pendingCount} iconBg="#f6ddab" iconColor="#c9922c" />
+          <StatCard icon={Users} label={t("agent.consignmentIntake.stats.activeSuppliers")} value={totals.activeSuppliers} iconBg="#e8cdc2" iconColor="#b15a41" />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
@@ -233,8 +233,8 @@ export default function AgentConsignmentIntake() {
                 padding: 24,
               }}
             >
-              <h2 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0, marginBottom: 20 }}>
-                Record new intake
+              <h2 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0, marginBottom: 20 }}>
+                {t("agent.consignmentIntake.recordNewIntake")}
               </h2>
               <form onSubmit={handleSubmit}>
                 <div
@@ -246,28 +246,28 @@ export default function AgentConsignmentIntake() {
                   }}
                 >
                   <div>
-                    <label style={fieldLabelStyle}>Supplier</label>
+                    <label style={fieldLabelStyle}>{t("agent.consignmentIntake.form.supplier")}</label>
                     <select
                       value={form.supplier}
                       onChange={(e) => handleChange("supplier", e.target.value)}
                       style={{ ...inputStyle, appearance: "none" }}
                     >
                       {SUPPLIERS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
+                        <option key={s} value={s}>{trader(s)}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label style={fieldLabelStyle}>Product</label>
+                    <label style={fieldLabelStyle}>{t("agent.consignmentIntake.form.product")}</label>
                     <input
                       value={form.product}
                       onChange={(e) => handleChange("product", e.target.value)}
-                      placeholder="e.g. Tomatoes"
+                      placeholder={t("agent.consignmentIntake.form.productPlaceholder")}
                       style={inputStyle}
                     />
                   </div>
                   <div>
-                    <label style={fieldLabelStyle}>Quantity (kg)</label>
+                    <label style={fieldLabelStyle}>{t("agent.consignmentIntake.form.quantityKg")}</label>
                     <input
                       type="number"
                       min="0"
@@ -278,7 +278,7 @@ export default function AgentConsignmentIntake() {
                     />
                   </div>
                   <div>
-                    <label style={fieldLabelStyle}>Unit price (Rs)</label>
+                    <label style={fieldLabelStyle}>{t("agent.consignmentIntake.form.unitPriceRs")}</label>
                     <input
                       type="number"
                       min="0"
@@ -305,11 +305,11 @@ export default function AgentConsignmentIntake() {
                     onMouseOver={(e) => (e.currentTarget.style.background = COLORS.goldHover)}
                     onMouseOut={(e) => (e.currentTarget.style.background = COLORS.gold)}
                   >
-                    Record intake
+                    {t("agent.consignmentIntake.recordIntake")}
                   </button>
                   {submitted && (
                     <span style={{ fontSize: 13, color: COLORS.sage, fontWeight: 500 }}>
-                      Intake recorded — awaiting supplier confirmation.
+                      {t("agent.consignmentIntake.submittedMsg")}
                     </span>
                   )}
                 </div>
@@ -337,8 +337,8 @@ export default function AgentConsignmentIntake() {
                   flexWrap: "wrap",
                 }}
               >
-                <h2 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                  Recent intakes
+                <h2 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+                  {t("agent.consignmentIntake.recentIntakes")}
                 </h2>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div
@@ -355,7 +355,7 @@ export default function AgentConsignmentIntake() {
                     <input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search product or supplier"
+                      placeholder={t("agent.common.searchProductSupplier")}
                       style={{
                         border: "none",
                         outline: "none",
@@ -380,10 +380,10 @@ export default function AgentConsignmentIntake() {
                         background: "#fff",
                       }}
                     >
-                      <option value="all">All statuses</option>
-                      <option value="confirmed">Confirmed</option>
-                      <option value="pending">Awaiting confirmation</option>
-                      <option value="rejected">Rejected</option>
+                      <option value="all">{t("agent.common.allStatuses")}</option>
+                      <option value="confirmed">{t("agent.common.status.confirmed")}</option>
+                      <option value="pending">{t("agent.common.status.awaitingConfirmation")}</option>
+                      <option value="rejected">{t("agent.common.status.rejected")}</option>
                     </select>
                     <ChevronDown
                       size={16}
@@ -398,33 +398,33 @@ export default function AgentConsignmentIntake() {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      <th style={thStyle}>Consignment</th>
-                      <th style={thStyle}>Supplier</th>
-                      <th style={thStyle}>Product</th>
-                      <th style={thStyle}>Quantity</th>
-                      <th style={thStyle}>Unit price</th>
-                      <th style={thStyle}>Date</th>
-                      <th style={thStyle}>Status</th>
+                      <th style={thStyle}>{t("agent.common.table.consignment")}</th>
+                      <th style={thStyle}>{t("agent.common.table.supplier")}</th>
+                      <th style={thStyle}>{t("agent.common.table.product")}</th>
+                      <th style={thStyle}>{t("agent.common.table.quantity")}</th>
+                      <th style={thStyle}>{t("agent.common.table.unitPrice")}</th>
+                      <th style={thStyle}>{t("agent.common.table.date")}</th>
+                      <th style={thStyle}>{t("agent.common.table.status")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map((r) => (
                       <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
                         <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>{r.id}</td>
-                        <td style={tdStyle}>{r.supplier}</td>
-                        <td style={tdStyle}>{r.product}</td>
-                        <td style={tdStyle}>{r.quantity.toLocaleString()} {r.unit}</td>
-                        <td style={tdStyle}>Rs {r.unitPrice}</td>
-                        <td style={{ ...tdStyle, color: COLORS.mutedText }}>{r.date}</td>
+                        <td style={tdStyle}>{trader(r.supplier)}</td>
+                        <td style={tdStyle}>{product(r.product)}</td>
+                        <td style={tdStyle}>{r.quantity.toLocaleString()} {unit}</td>
+                        <td style={tdStyle}>{t("buyer.common.currency")} {r.unitPrice}</td>
+                        <td style={{ ...tdStyle, color: COLORS.mutedText }}>{formatAgentDate(r.date, language)}</td>
                         <td style={tdStyle}>
-                          <StatusBadge status={r.status} />
+                          <StatusBadge meta={STATUS_META[r.status]} />
                         </td>
                       </tr>
                     ))}
                     {filtered.length === 0 && (
                       <tr>
                         <td colSpan={7} style={{ padding: "40px 20px", textAlign: "center", color: COLORS.mutedText }}>
-                          No intakes match your search.
+                          {t("agent.consignmentIntake.noResults")}
                         </td>
                       </tr>
                     )}
@@ -440,19 +440,19 @@ export default function AgentConsignmentIntake() {
             <div style={{ borderRadius: 16, background: COLORS.forest, padding: 24, color: "#fff" }}>
               <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
                 <ClipboardCheck size={20} color={COLORS.gold} />
-                <h3 style={{ fontFamily: "Georgia, serif", fontSize: 18, margin: 0 }}>Awaiting confirmation</h3>
+                <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, margin: 0 }}>{t("agent.consignmentIntake.awaitingConfirmation")}</h3>
               </div>
               {pendingItems.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {pendingItems.map((r) => (
                     <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{r.product} · {r.supplier}</span>
-                      <span style={{ fontWeight: 600 }}>{r.quantity.toLocaleString()} {r.unit}</span>
+                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{product(r.product)} · {trader(r.supplier)}</span>
+                      <span style={{ fontWeight: 600 }}>{r.quantity.toLocaleString()} {unit}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>Nothing awaiting confirmation.</p>
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>{t("agent.consignmentIntake.nothingAwaiting")}</p>
               )}
               <button
                 style={{
@@ -470,7 +470,7 @@ export default function AgentConsignmentIntake() {
                 onMouseOver={(e) => (e.currentTarget.style.background = COLORS.goldHover)}
                 onMouseOut={(e) => (e.currentTarget.style.background = COLORS.gold)}
               >
-                Review all
+                {t("agent.consignmentIntake.reviewAll")}
               </button>
             </div>
 
@@ -484,20 +484,20 @@ export default function AgentConsignmentIntake() {
                 boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
               }}
             >
-              <h3 style={{ fontFamily: "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                This month
+              <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+                {t("agent.common.thisMonth")}
               </h3>
               <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12, fontSize: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Consignments received</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.consignmentIntake.thisMonth.consignmentsReceived")}</span>
                   <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.thisMonth}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Total quantity</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.totalQty.toLocaleString()} kg</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.consignmentIntake.thisMonth.totalQuantity")}</span>
+                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.totalQty.toLocaleString()} {unit}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>Active suppliers</span>
+                  <span style={{ color: COLORS.mutedText }}>{t("agent.consignmentIntake.thisMonth.activeSuppliers")}</span>
                   <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.activeSuppliers}</span>
                 </div>
               </div>

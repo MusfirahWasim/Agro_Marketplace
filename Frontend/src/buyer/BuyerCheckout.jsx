@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Wallet, CreditCard, MapPin, CheckCircle2 } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import { localizeProduct, localizeTrader, formatCurrency } from "../i18n/dataLocale";
 
 const COLORS = {
   forest: "#1e4620",
@@ -17,10 +19,15 @@ const COLORS = {
 export default function BuyerCheckout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { language, t } = useLanguage();
+  const isUr = language === "ur";
   const cartItems = location.state?.cartItems || [];
+  const currency = t("buyer.common.currency");
+  const product = (name) => localizeProduct(name, language);
+  const trader = (name) => localizeTrader(name, language);
 
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [address, setAddress] = useState("Shop 8, DHA Phase 5, Karachi");
+  const [address, setAddress] = useState(t("buyer.checkout.defaultAddress"));
   const [notes, setNotes] = useState("");
   const [placed, setPlaced] = useState(false);
 
@@ -34,27 +41,29 @@ export default function BuyerCheckout() {
     setPlaced(true);
   };
 
+  const fontImport = `
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+    .font-display { font-family: ${isUr ? "'Noto Nastaliq Urdu', serif" : "'Fraunces', serif"}; }
+    .font-body { font-family: ${isUr ? "'Noto Nastaliq Urdu', serif" : "'Inter', sans-serif"}; }
+  `;
+
   // nothing to check out — send the buyer back to the marketplace
   if (cartItems.length === 0 && !placed) {
     return (
-      <div className="font-body flex flex-col items-center justify-center py-24 text-center" style={{ backgroundColor: COLORS.cream }}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
-          .font-display { font-family: 'Fraunces', serif; }
-          .font-body { font-family: 'Inter', sans-serif; }
-        `}</style>
+      <div className="font-body flex flex-col items-center justify-center py-24 text-center" style={{ backgroundColor: COLORS.cream }} dir={isUr ? "rtl" : "ltr"}>
+        <style>{fontImport}</style>
         <h1 className="font-display text-2xl mb-2" style={{ color: COLORS.ink }}>
-          Your cart is empty
+          {t("buyer.checkout.emptyCartTitle")}
         </h1>
         <p className="text-sm mb-6" style={{ color: COLORS.sub }}>
-          Add some products from the marketplace before checking out.
+          {t("buyer.checkout.emptyCartSubtitle")}
         </p>
         <button
           onClick={() => navigate("/buyer/marketplace")}
           className="px-4 py-2.5 rounded-lg text-sm font-medium"
           style={{ backgroundColor: COLORS.forest, color: "white" }}
         >
-          Back to marketplace
+          {t("buyer.common.backToMarketplace")}
         </button>
       </div>
     );
@@ -63,12 +72,8 @@ export default function BuyerCheckout() {
   // order confirmed screen
   if (placed) {
     return (
-      <div className="font-body flex flex-col items-center justify-center py-24 text-center" style={{ backgroundColor: COLORS.cream }}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
-          .font-display { font-family: 'Fraunces', serif; }
-          .font-body { font-family: 'Inter', sans-serif; }
-        `}</style>
+      <div className="font-body flex flex-col items-center justify-center py-24 text-center" style={{ backgroundColor: COLORS.cream }} dir={isUr ? "rtl" : "ltr"}>
+        <style>{fontImport}</style>
         <div
           className="w-16 h-16 rounded-full flex items-center justify-center mb-5"
           style={{ backgroundColor: "#eaf1e4" }}
@@ -76,30 +81,25 @@ export default function BuyerCheckout() {
           <CheckCircle2 size={30} color={COLORS.leaf} />
         </div>
         <h1 className="font-display text-2xl mb-2" style={{ color: COLORS.ink }}>
-          Order placed successfully
+          {t("buyer.checkout.orderPlacedTitle")}
         </h1>
         <p className="text-sm mb-6 max-w-sm" style={{ color: COLORS.sub }}>
-          Your order totaling Rs {total.toLocaleString()} has been sent to the respective
-          commission agents. You can track its status from My orders.
+          {t("buyer.checkout.orderPlacedSubtitle", { total: formatCurrency(total, t) })}
         </p>
         <button
           onClick={() => navigate("/buyer/orders")}
           className="px-4 py-2.5 rounded-lg text-sm font-medium"
           style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
         >
-          View my orders
+          {t("buyer.checkout.viewMyOrders")}
         </button>
       </div>
     );
   }
 
   return (
-    <div className="font-body" style={{ backgroundColor: COLORS.cream }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
-        .font-display { font-family: 'Fraunces', serif; }
-        .font-body { font-family: 'Inter', sans-serif; }
-      `}</style>
+    <div className="font-body" style={{ backgroundColor: COLORS.cream }} dir={isUr ? "rtl" : "ltr"}>
+      <style>{fontImport}</style>
 
       {/* header */}
       <button
@@ -107,15 +107,15 @@ export default function BuyerCheckout() {
         className="flex items-center gap-1.5 text-sm font-medium mb-4"
         style={{ color: COLORS.sub }}
       >
-        <ArrowLeft size={15} />
-        Back to marketplace
+        <ArrowLeft size={15} style={isUr ? { transform: "scaleX(-1)" } : undefined} />
+        {t("buyer.common.backToMarketplace")}
       </button>
 
       <h1 className="font-display text-2xl sm:text-3xl mb-1" style={{ color: COLORS.ink }}>
-        Checkout
+        {t("buyer.checkout.title")}
       </h1>
       <p className="text-sm mb-8" style={{ color: COLORS.sub }}>
-        Review your order and confirm delivery and payment details.
+        {t("buyer.checkout.subtitle")}
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -129,12 +129,12 @@ export default function BuyerCheckout() {
             <div className="flex items-center gap-2 mb-5">
               <MapPin size={16} color={COLORS.forest} />
               <h2 className="font-display text-lg" style={{ color: COLORS.ink }}>
-                Delivery details
+                {t("buyer.checkout.deliveryDetails")}
               </h2>
             </div>
 
             <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-              Delivery address
+              {t("buyer.checkout.deliveryAddressLabel")}
             </label>
             <input
               required
@@ -145,13 +145,13 @@ export default function BuyerCheckout() {
             />
 
             <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-              Notes for the agent (optional)
+              {t("buyer.checkout.notesLabel")}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              placeholder="e.g. preferred delivery time"
+              placeholder={t("buyer.checkout.notesPlaceholder")}
               className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none resize-none"
               style={{ borderColor: COLORS.border }}
             />
@@ -165,7 +165,7 @@ export default function BuyerCheckout() {
             <div className="flex items-center gap-2 mb-5">
               <Wallet size={16} color={COLORS.forest} />
               <h2 className="font-display text-lg" style={{ color: COLORS.ink }}>
-                Payment method
+                {t("buyer.checkout.paymentMethod")}
               </h2>
             </div>
 
@@ -182,8 +182,8 @@ export default function BuyerCheckout() {
               >
                 <Wallet size={18} color={paymentMethod === "cash" ? COLORS.leaf : COLORS.sub} />
                 <div>
-                  <p className="text-sm font-medium" style={{ color: COLORS.ink }}>Cash</p>
-                  <p className="text-xs" style={{ color: COLORS.sub }}>Pay on delivery</p>
+                  <p className="text-sm font-medium" style={{ color: COLORS.ink }}>{t("buyer.common.cash")}</p>
+                  <p className="text-xs" style={{ color: COLORS.sub }}>{t("buyer.checkout.cashSubtitle")}</p>
                 </div>
               </button>
 
@@ -199,8 +199,8 @@ export default function BuyerCheckout() {
               >
                 <CreditCard size={18} color={paymentMethod === "credit" ? COLORS.leaf : COLORS.sub} />
                 <div>
-                  <p className="text-sm font-medium" style={{ color: COLORS.ink }}>Credit</p>
-                  <p className="text-xs" style={{ color: COLORS.sub }}>Settle later as dues</p>
+                  <p className="text-sm font-medium" style={{ color: COLORS.ink }}>{t("buyer.common.credit")}</p>
+                  <p className="text-xs" style={{ color: COLORS.sub }}>{t("buyer.checkout.creditSubtitle")}</p>
                 </div>
               </button>
             </div>
@@ -211,7 +211,7 @@ export default function BuyerCheckout() {
             className="w-full py-3 rounded-lg text-sm font-medium"
             style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
           >
-            Place order &middot; Rs {total.toLocaleString()}
+            {t("buyer.checkout.placeOrder")} &middot; {formatCurrency(total, t)}
           </button>
         </form>
 
@@ -221,20 +221,20 @@ export default function BuyerCheckout() {
           style={{ backgroundColor: "white", borderColor: COLORS.greige }}
         >
           <h2 className="font-display text-lg mb-4" style={{ color: COLORS.ink }}>
-            Order summary
+            {t("buyer.checkout.orderSummary")}
           </h2>
 
           <div className="flex flex-col gap-3 mb-5">
             {cartItems.map((item) => (
               <div key={item.consignId} className="flex items-center justify-between text-sm">
                 <div>
-                  <p style={{ color: COLORS.ink }}>{item.product}</p>
+                  <p style={{ color: COLORS.ink }}>{product(item.product)}</p>
                   <p className="text-xs" style={{ color: COLORS.sub }}>
-                    {item.qty} &times; Rs {item.price} &middot; via {item.agent}
+                    {item.qty} &times; {currency} {item.price} &middot; {t("buyer.common.via", { agent: trader(item.agent) })}
                   </p>
                 </div>
                 <p className="font-medium" style={{ color: COLORS.ink }}>
-                  Rs {(item.qty * item.price).toLocaleString()}
+                  {currency} {(item.qty * item.price).toLocaleString()}
                 </p>
               </div>
             ))}
@@ -242,17 +242,17 @@ export default function BuyerCheckout() {
 
           <div className="border-t pt-4 space-y-2" style={{ borderColor: COLORS.greige }}>
             <div className="flex items-center justify-between text-sm">
-              <span style={{ color: COLORS.sub }}>Subtotal</span>
-              <span style={{ color: COLORS.ink }}>Rs {subtotal.toLocaleString()}</span>
+              <span style={{ color: COLORS.sub }}>{t("buyer.common.subtotal")}</span>
+              <span style={{ color: COLORS.ink }}>{currency} {subtotal.toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span style={{ color: COLORS.sub }}>Service fee</span>
-              <span style={{ color: COLORS.ink }}>Rs {serviceFee.toLocaleString()}</span>
+              <span style={{ color: COLORS.sub }}>{t("buyer.checkout.serviceFee")}</span>
+              <span style={{ color: COLORS.ink }}>{currency} {serviceFee.toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: COLORS.greige }}>
-              <span className="font-medium" style={{ color: COLORS.ink }}>Total</span>
+              <span className="font-medium" style={{ color: COLORS.ink }}>{t("buyer.common.total")}</span>
               <span className="font-display text-xl" style={{ color: COLORS.ink }}>
-                Rs {total.toLocaleString()}
+                {currency} {total.toLocaleString()}
               </span>
             </div>
           </div>

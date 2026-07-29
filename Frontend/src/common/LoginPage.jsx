@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Leaf, Mail, Lock, Eye, EyeOff, ArrowRight, Wheat } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useLanguage } from "../i18n/LanguageContext";
+import LanguageSelector from "../i18n/LanguageSelector";
 
 const ROLES = [
-  { key: "supplier", label: "Supplier" },
-  { key: "agent", label: "Commission Agent" },
-  { key: "buyer", label: "Buyer" },
+  { key: "supplier", labelKey: "common.roles.supplier" },
+  { key: "agent", labelKey: "common.roles.agent" },
+  { key: "buyer", labelKey: "common.roles.buyer" },
 ];
 
 const COLORS = {
@@ -20,6 +22,7 @@ const COLORS = {
 };
 
 export default function LoginPage() {
+  const { t, isRTL } = useLanguage();
   const [role, setRole] = useState("supplier");
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -34,15 +37,26 @@ export default function LoginPage() {
     navigate("/buyer/marketplace");
   };
 
+  const activeRoleLabel = t(ROLES.find((r) => r.key === role)?.labelKey);
+
   return (
-    <div className="min-h-screen w-full flex" style={{ backgroundColor: COLORS.cream }}>
+    // dir="ltr" is forced here so the two-column layout never reverses —
+    // even though <html> gets dir="rtl" globally when Urdu is active,
+    // this local override keeps the branding panel pinned left always.
+    <div
+      dir="ltr"
+      className="min-h-screen w-full flex"
+      style={{ backgroundColor: COLORS.cream }}
+    >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
         .font-display { font-family: 'Fraunces', serif; }
         .font-body { font-family: 'Inter', sans-serif; }
+        .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; }
       `}</style>
 
-      {/* LEFT — hero / brand panel */}
+      {/* LEFT — hero / brand panel. Position, layout, image, and stats
+          never change. Only the text content swaps language. */}
       <div
         className="hidden lg:flex lg:w-1/2 relative flex-col justify-between overflow-hidden font-body"
         style={{ backgroundColor: COLORS.forest }}
@@ -88,48 +102,65 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <h1 className="font-display text-white text-3xl text-center leading-snug mb-3">
-            From farm gate to market crate
+          <h1
+            className={`text-white text-3xl text-center leading-snug mb-3 ${isRTL ? "font-urdu" : "font-display"}`}
+          >
+            {t("login.hero.title")}
           </h1>
           <p className="text-center max-w-sm" style={{ color: "#c9d9c2" }}>
-            One connected ledger for suppliers, commission agents, and buyers —
-            built for the way wholesale markets actually work.
+            {t("login.hero.subtitle")}
           </p>
         </div>
 
         <div className="relative z-10 px-12 pb-12 flex items-center gap-10">
           <div>
             <p className="font-display text-2xl text-white">1,200+</p>
-            <p className="text-xs" style={{ color: "#a9c19f" }}>Consignments tracked</p>
+            <p className="text-xs" style={{ color: "#a9c19f" }}>
+              {t("common.stats.consignmentsTracked")}
+            </p>
           </div>
           <div className="w-px h-8" style={{ backgroundColor: "#3a5c3a" }} />
           <div>
             <p className="font-display text-2xl text-white">98%</p>
-            <p className="text-xs" style={{ color: "#a9c19f" }}>Payment traceability</p>
+            <p className="text-xs" style={{ color: "#a9c19f" }}>
+              {t("common.stats.paymentTraceability")}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* RIGHT — form panel */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-12 py-12 font-body">
+      {/* RIGHT — form panel. This is the ONLY part that flips to RTL
+          when Urdu is selected; the outer layout above stays untouched. */}
+      <div
+        dir={isRTL ? "rtl" : "ltr"}
+        className="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-12 py-12 font-body"
+      >
         <div className="w-full max-w-sm">
-          <div className="lg:hidden flex items-center gap-2 mb-10 justify-center">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: COLORS.forest }}
-            >
-              <Leaf size={16} color={COLORS.gold} />
+          <div className="flex items-center justify-between mb-6 lg:mb-10">
+            <div className="lg:hidden flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: COLORS.forest }}
+              >
+                <Leaf size={16} color={COLORS.gold} />
+              </div>
+              <span className="font-display text-xl" style={{ color: COLORS.forest }}>
+                AISAMMS
+              </span>
             </div>
-            <span className="font-display text-xl" style={{ color: COLORS.forest }}>
-              AISAMMS
-            </span>
+            <div className={isRTL ? "mr-auto" : "ml-auto"}>
+              <LanguageSelector />
+            </div>
           </div>
 
-          <h2 className="font-display text-3xl mb-1" style={{ color: COLORS.ink }}>
-            Welcome back
+          <h2
+            className={`text-3xl mb-1 ${isRTL ? "font-urdu" : "font-display"}`}
+            style={{ color: COLORS.ink }}
+          >
+            {t("login.welcomeBack")}
           </h2>
           <p className="text-sm mb-8" style={{ color: "#6b7568" }}>
-            Sign in to manage your market operations.
+            {t("login.subtitle")}
           </p>
 
           {/* role selector */}
@@ -149,7 +180,7 @@ export default function LoginPage() {
                     : { color: "#5b6154" }
                 }
               >
-                {r.label}
+                {t(r.labelKey)}
               </button>
             ))}
           </div>
@@ -157,12 +188,12 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                Email address
+                {t("login.emailLabel")}
               </label>
               <div className="relative">
                 <Mail
                   size={17}
-                  className="absolute left-3 top-1/2 -translate-y-1/2"
+                  className={`absolute top-1/2 -translate-y-1/2 ${isRTL ? "right-3" : "left-3"}`}
                   color="#909685"
                 />
                 <input
@@ -170,8 +201,10 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@marketname.com"
-                  className="w-full pl-10 pr-3 py-2.5 rounded-lg border text-sm outline-none transition-colors focus:ring-2"
+                  placeholder={t("login.emailPlaceholder")}
+                  className={`w-full py-2.5 rounded-lg border text-sm outline-none transition-colors focus:ring-2 ${
+                    isRTL ? "pr-10 pl-3" : "pl-10 pr-3"
+                  }`}
                   style={{ borderColor: "#d9ddce", backgroundColor: "white" }}
                 />
               </div>
@@ -179,12 +212,12 @@ export default function LoginPage() {
 
             <div>
               <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                Password
+                {t("login.passwordLabel")}
               </label>
               <div className="relative">
                 <Lock
                   size={17}
-                  className="absolute left-3 top-1/2 -translate-y-1/2"
+                  className={`absolute top-1/2 -translate-y-1/2 ${isRTL ? "right-3" : "left-3"}`}
                   color="#909685"
                 />
                 <input
@@ -193,13 +226,15 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-lg border text-sm outline-none transition-colors"
+                  className={`w-full py-2.5 rounded-lg border text-sm outline-none transition-colors ${
+                    isRTL ? "pr-10 pl-10" : "pl-10 pr-10"
+                  }`}
                   style={{ borderColor: "#d9ddce", backgroundColor: "white" }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  className={`absolute top-1/2 -translate-y-1/2 ${isRTL ? "left-3" : "right-3"}`}
                 >
                   {showPassword ? (
                     <EyeOff size={17} color="#909685" />
@@ -213,10 +248,10 @@ export default function LoginPage() {
             <div className="flex items-center justify-between pt-1">
               <label className="flex items-center gap-2 text-xs" style={{ color: "#5b6154" }}>
                 <input type="checkbox" className="rounded" />
-                Remember me
+                {t("login.rememberMe")}
               </label>
               <a href="#" className="text-xs font-medium" style={{ color: COLORS.leaf }}>
-                Forgot password?
+                {t("login.forgotPassword")}
               </a>
             </div>
 
@@ -225,15 +260,15 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-medium text-sm mt-2 transition-transform active:scale-[0.99]"
               style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
             >
-              Sign in as {ROLES.find((r) => r.key === role)?.label}
-              <ArrowRight size={16} />
+              {t("login.signInAs", { role: activeRoleLabel })}
+              <ArrowRight size={16} className={isRTL ? "rotate-180" : ""} />
             </button>
           </form>
 
           <p className="text-center text-sm mt-8" style={{ color: "#6b7568" }}>
-            New to AISAMMS?{" "}
+            {t("login.newToAisamms")}{" "}
             <a href="#" className="font-medium" style={{ color: COLORS.forest }}>
-              Contact your market administrator
+              {t("login.contactAdmin")}
             </a>
           </p>
         </div>

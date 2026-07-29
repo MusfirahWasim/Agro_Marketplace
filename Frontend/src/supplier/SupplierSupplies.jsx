@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Plus, Search, Pencil, Trash2, X, Sprout } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const COLORS = {
   forest: "#1e4620",
@@ -15,25 +16,32 @@ const COLORS = {
 };
 
 const INITIAL_SUPPLIES = [
-  { id: 1, product: "Tomato (Grade A)", category: "Vegetable", qty: 320, unit: "kg", price: 85, added: "10 Jul 2026" },
-  { id: 2, product: "Onion", category: "Vegetable", qty: 540, unit: "kg", price: 60, added: "09 Jul 2026" },
-  { id: 3, product: "Potato", category: "Vegetable", qty: 780, unit: "kg", price: 45, added: "08 Jul 2026" },
-  { id: 4, product: "Green chili", category: "Vegetable", qty: 15, unit: "kg", price: 140, added: "07 Jul 2026" },
-  { id: 5, product: "Spinach", category: "Leafy green", qty: 22, unit: "kg", price: 55, added: "06 Jul 2026" },
+  { id: 1, product: "Tomato (Grade A)", productKey: "tomatoGradeA", category: "Vegetable", categoryKey: "vegetable", qty: 320, unit: "kg", price: 85, added: "2026-07-10" },
+  { id: 2, product: "Onion", productKey: "onion", category: "Vegetable", categoryKey: "vegetable", qty: 540, unit: "kg", price: 60, added: "2026-07-09" },
+  { id: 3, product: "Potato", productKey: "potato", category: "Vegetable", categoryKey: "vegetable", qty: 780, unit: "kg", price: 45, added: "2026-07-08" },
+  { id: 4, product: "Green chili", productKey: "greenChili", category: "Vegetable", categoryKey: "vegetable", qty: 15, unit: "kg", price: 140, added: "2026-07-07" },
+  { id: 5, product: "Spinach", productKey: "spinach", category: "Leafy green", categoryKey: "leafyGreen", qty: 22, unit: "kg", price: 55, added: "2026-07-06" },
 ];
 
 const emptyForm = { product: "", category: "", qty: "", unit: "kg", price: "" };
 
 export default function SupplierSupplies() {
+  const { t, formatDate, language } = useLanguage();
+  const isUr = language === "ur";
+  const unit = isUr ? "کلوگرام" : "kg";
   const [supplies, setSupplies] = useState(INITIAL_SUPPLIES);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
-  const filtered = supplies.filter((s) =>
-    s.product.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = supplies.filter((s) => {
+    const displayName = s.productKey ? t(`common.produce.${s.productKey}`) : s.product;
+    return (
+      s.product.toLowerCase().includes(search.toLowerCase()) ||
+      displayName.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   const openAddForm = () => {
     setEditingId(null);
@@ -44,8 +52,8 @@ export default function SupplierSupplies() {
   const openEditForm = (item) => {
     setEditingId(item.id);
     setForm({
-      product: item.product,
-      category: item.category,
+      product: item.productKey ? t(`common.produce.${item.productKey}`) : item.product,
+      category: item.categoryKey ? t(`common.categories.${item.categoryKey}`) : item.category,
       qty: item.qty,
       unit: item.unit,
       price: item.price,
@@ -60,10 +68,19 @@ export default function SupplierSupplies() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (editingId) {
+      // Edits from the form are free-text, so they no longer map to a
+      // known productKey/categoryKey — clear those so the raw text is shown.
       setSupplies((prev) =>
         prev.map((s) =>
           s.id === editingId
-            ? { ...s, ...form, qty: Number(form.qty), price: Number(form.price) }
+            ? {
+                ...s,
+                ...form,
+                productKey: undefined,
+                categoryKey: undefined,
+                qty: Number(form.qty),
+                price: Number(form.price),
+              }
             : s
         )
       );
@@ -74,7 +91,7 @@ export default function SupplierSupplies() {
           ...form,
           qty: Number(form.qty),
           price: Number(form.price),
-          added: "Today",
+          added: new Date().toISOString().slice(0, 10),
         },
         ...prev,
       ]);
@@ -88,23 +105,27 @@ export default function SupplierSupplies() {
   const lowStockCount = supplies.filter((s) => s.qty < 50).length;
 
   return (
-    <div className="font-body" style={{ backgroundColor: COLORS.cream }}>
+    <div className="font-body" style={{ backgroundColor: COLORS.cream }} dir={isUr ? "rtl" : "ltr"}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
-        .font-display { font-family: 'Fraunces', serif; }
-        .font-body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        .font-display { font-family: ${isUr ? "'Noto Nastaliq Urdu', serif" : "'Fraunces', serif"}; }
+        .font-body { font-family: ${isUr ? "'Noto Nastaliq Urdu', serif" : "'Inter', sans-serif"}; }
       `}</style>
 
       {/* header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl" style={{ color: COLORS.ink }}>
-            My supplies
+            {t("supplier.supplies.title")}
           </h1>
           <p className="text-sm mt-1" style={{ color: COLORS.sub }}>
-            {supplies.length} products &middot; {totalStock.toLocaleString()} kg total stock
+            {t("supplier.supplies.productsCount", { count: supplies.length })} &middot;{" "}
+            {t("supplier.supplies.totalStock", { amount: totalStock.toLocaleString() })}
             {lowStockCount > 0 && (
-              <span style={{ color: COLORS.goldDark }}> &middot; {lowStockCount} running low</span>
+              <span style={{ color: COLORS.goldDark }}>
+                {" "}
+                &middot; {t("supplier.supplies.runningLow", { count: lowStockCount })}
+              </span>
             )}
           </p>
         </div>
@@ -114,7 +135,7 @@ export default function SupplierSupplies() {
           style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
         >
           <Plus size={16} />
-          Add supply
+          {t("supplier.supplies.addSupply")}
         </button>
       </div>
 
@@ -124,7 +145,7 @@ export default function SupplierSupplies() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search your products..."
+          placeholder={t("supplier.supplies.searchPlaceholder")}
           className="w-full pl-9 pr-3 py-2.5 rounded-lg border text-sm outline-none"
           style={{ borderColor: COLORS.border, backgroundColor: "white" }}
         />
@@ -139,7 +160,7 @@ export default function SupplierSupplies() {
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display text-lg" style={{ color: COLORS.ink }}>
-              {editingId ? "Edit supply" : "Add new supply"}
+              {editingId ? t("supplier.supplies.editSupply") : t("supplier.supplies.addNewSupply")}
             </h2>
             <button type="button" onClick={() => setShowForm(false)}>
               <X size={18} color={COLORS.sub} />
@@ -149,13 +170,13 @@ export default function SupplierSupplies() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="lg:col-span-2">
               <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                Product name
+                {t("supplier.supplies.form.productName")}
               </label>
               <input
                 required
                 value={form.product}
                 onChange={(e) => setForm({ ...form, product: e.target.value })}
-                placeholder="e.g. Tomato (Grade A)"
+                placeholder={t("supplier.supplies.form.productPlaceholder")}
                 className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none"
                 style={{ borderColor: COLORS.border }}
               />
@@ -163,13 +184,13 @@ export default function SupplierSupplies() {
 
             <div>
               <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                Category
+                {t("supplier.supplies.form.category")}
               </label>
               <input
                 required
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                placeholder="Vegetable"
+                placeholder={t("supplier.supplies.form.categoryPlaceholder")}
                 className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none"
                 style={{ borderColor: COLORS.border }}
               />
@@ -177,7 +198,7 @@ export default function SupplierSupplies() {
 
             <div>
               <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                Quantity (kg)
+                {t("supplier.supplies.form.quantity")}
               </label>
               <input
                 required
@@ -193,7 +214,7 @@ export default function SupplierSupplies() {
 
             <div>
               <label className="text-xs font-medium mb-1.5 block" style={{ color: "#4a5240" }}>
-                Price / kg (Rs)
+                {t("supplier.supplies.form.price")}
               </label>
               <input
                 required
@@ -214,7 +235,7 @@ export default function SupplierSupplies() {
               className="px-4 py-2.5 rounded-lg text-sm font-medium"
               style={{ backgroundColor: COLORS.forest, color: "white" }}
             >
-              {editingId ? "Save changes" : "Add to inventory"}
+              {editingId ? t("supplier.supplies.saveChanges") : t("supplier.supplies.addToInventory")}
             </button>
             <button
               type="button"
@@ -222,7 +243,7 @@ export default function SupplierSupplies() {
               className="px-4 py-2.5 rounded-lg text-sm font-medium border"
               style={{ borderColor: COLORS.border, color: COLORS.sub }}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>
@@ -236,12 +257,12 @@ export default function SupplierSupplies() {
         <table className="w-full text-sm">
           <thead>
             <tr style={{ color: COLORS.sub }}>
-              <th className="text-left font-medium px-5 py-3">Product</th>
-              <th className="text-left font-medium px-5 py-3">Category</th>
-              <th className="text-left font-medium px-5 py-3">Quantity</th>
-              <th className="text-left font-medium px-5 py-3">Price / kg</th>
-              <th className="text-left font-medium px-5 py-3">Added</th>
-              <th className="text-right font-medium px-5 py-3">Actions</th>
+              <th className="text-left font-medium px-5 py-3">{t("supplier.supplies.table.product")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("supplier.supplies.table.category")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("supplier.supplies.table.quantity")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("supplier.supplies.table.price")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("supplier.supplies.table.added")}</th>
+              <th className="text-right font-medium px-5 py-3">{t("supplier.supplies.table.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -256,12 +277,12 @@ export default function SupplierSupplies() {
                       <Sprout size={14} color={COLORS.leaf} />
                     </div>
                     <span className="font-medium" style={{ color: COLORS.ink }}>
-                      {s.product}
+                      {s.productKey ? t(`common.produce.${s.productKey}`) : s.product}
                     </span>
                   </div>
                 </td>
                 <td className="px-5 py-3" style={{ color: COLORS.sub }}>
-                  {s.category}
+                  {s.categoryKey ? t(`common.categories.${s.categoryKey}`) : s.category}
                 </td>
                 <td className="px-5 py-3">
                   <span
@@ -270,19 +291,19 @@ export default function SupplierSupplies() {
                       fontWeight: s.qty < 50 ? 500 : 400,
                     }}
                   >
-                    {s.qty} {s.unit}
+                    {s.qty} {unit}
                   </span>
                   {s.qty < 50 && (
                     <span className="text-xs ml-1.5" style={{ color: COLORS.goldDark }}>
-                      Low
+                      {t("supplier.supplies.low")}
                     </span>
                   )}
                 </td>
                 <td className="px-5 py-3" style={{ color: COLORS.ink }}>
-                  Rs {s.price}
+                  {t("supplier.common.currency")} {s.price}
                 </td>
                 <td className="px-5 py-3" style={{ color: COLORS.sub }}>
-                  {s.added}
+                  {formatDate(s.added)}
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center justify-end gap-3">
@@ -300,7 +321,7 @@ export default function SupplierSupplies() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-5 py-10 text-center" style={{ color: COLORS.sub }}>
-                  No products match your search.
+                  {t("supplier.supplies.noResults")}
                 </td>
               </tr>
             )}

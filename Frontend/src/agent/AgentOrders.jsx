@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { Search, ShoppingCart, Percent, Wallet, Clock } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
+import LanguageSelector from "../i18n/LanguageSelector";
+import { localizeTrader, localizeProduct, formatAgentCurrency } from "./agentLocale";
 
 const COLORS = {
   forest: "#1e4620",
@@ -15,62 +18,83 @@ const COLORS = {
 };
 
 const ORDERS = [
-  { id: "ORD-2211", consignId: "CN-1042", buyer: "Green Valley Store", product: "Tomato (Grade A)", qty: "300 kg", amount: 25500, commission: 1657, payment: "Cash", status: "Paid" },
-  { id: "ORD-2210", consignId: "CN-1041", buyer: "Sana Wholesale", product: "Onion", qty: "680 kg", amount: 41000, commission: 2665, payment: "Credit", status: "Credit" },
-  { id: "ORD-2208", consignId: "CN-1039", buyer: "Karachi Mart", product: "Potato", qty: "420 kg", amount: 18900, commission: 1228, payment: "Cash", status: "Paid" },
-  { id: "ORD-2205", consignId: "CN-1036", buyer: "Bilal Supplies", product: "Tomato (Grade B)", qty: "150 kg", amount: 12300, commission: 799, payment: "Cash", status: "Refunded" },
-  { id: "ORD-2201", consignId: "CN-1042", buyer: "Fresh Mart", product: "Tomato (Grade A)", qty: "220 kg", amount: 18700, commission: 1215, payment: "Credit", status: "Credit" },
-  { id: "ORD-2198", consignId: "CN-1039", buyer: "Karachi Mart", product: "Potato", qty: "310 kg", amount: 13950, commission: 907, payment: "Cash", status: "Paid" },
+  { id: "ORD-2211", consignId: "CN-1042", buyer: "Green Valley Store", product: "Tomato (Grade A)", qty: 300, amount: 25500, commission: 1657, payment: "cash", status: "paid" },
+  { id: "ORD-2210", consignId: "CN-1041", buyer: "Sana Wholesale", product: "Onion", qty: 680, amount: 41000, commission: 2665, payment: "credit", status: "credit" },
+  { id: "ORD-2208", consignId: "CN-1039", buyer: "Karachi Mart", product: "Potato", qty: 420, amount: 18900, commission: 1228, payment: "cash", status: "paid" },
+  { id: "ORD-2205", consignId: "CN-1036", buyer: "Bilal Supplies", product: "Tomato (Grade B)", qty: 150, amount: 12300, commission: 799, payment: "cash", status: "refunded" },
+  { id: "ORD-2201", consignId: "CN-1042", buyer: "Fresh Mart", product: "Tomato (Grade A)", qty: 220, amount: 18700, commission: 1215, payment: "credit", status: "credit" },
+  { id: "ORD-2198", consignId: "CN-1039", buyer: "Karachi Mart", product: "Potato", qty: 310, amount: 13950, commission: 907, payment: "cash", status: "paid" },
 ];
 
-const STATUS_STYLE = {
-  Paid: { bg: "#eaf1e4", text: COLORS.leaf },
-  Credit: { bg: "#fdf1dc", text: "#a3721b" },
-  Refunded: { bg: "#faeaea", text: "#b5544a" },
-};
-
-const FILTERS = ["All", "Paid", "Credit", "Refunded"];
+const FILTERS = ["all", "paid", "credit", "refunded"];
 
 export default function AgentOrders() {
+  const { language, t } = useLanguage();
+  const isUr = language === "ur";
+  const trader = (name) => localizeTrader(name, language);
+  const product = (name) => localizeProduct(name, language);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("All");
+  const [filter, setFilter] = useState("all");
+
+  const STATUS_STYLE = {
+    paid: { bg: "#eaf1e4", text: COLORS.leaf, label: t("agent.common.status.paid") },
+    credit: { bg: "#fdf1dc", text: "#a3721b", label: t("agent.common.status.credit") },
+    refunded: { bg: "#faeaea", text: "#b5544a", label: t("agent.common.status.refunded") },
+  };
+
+  const PAYMENT_LABEL = {
+    cash: t("agent.common.payment.cash"),
+    credit: t("agent.common.payment.credit"),
+  };
+
+  const FILTER_LABEL = {
+    all: t("agent.orders.filters.all"),
+    paid: t("agent.common.status.paid"),
+    credit: t("agent.common.status.credit"),
+    refunded: t("agent.common.status.refunded"),
+  };
 
   const filtered = ORDERS.filter((o) => {
+    const q = search.toLowerCase();
     const matchesSearch =
-      o.buyer.toLowerCase().includes(search.toLowerCase()) ||
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.consignId.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filter === "All" || o.status === filter;
+      o.buyer.toLowerCase().includes(q) ||
+      trader(o.buyer).includes(search) ||
+      o.id.toLowerCase().includes(q) ||
+      o.consignId.toLowerCase().includes(q);
+    const matchesFilter = filter === "all" || o.status === filter;
     return matchesSearch && matchesFilter;
   });
 
   const totalSales = ORDERS.reduce((sum, o) => sum + o.amount, 0);
   const totalCommission = ORDERS.reduce((sum, o) => sum + o.commission, 0);
-  const pendingCount = ORDERS.filter((o) => o.status === "Credit").length;
+  const pendingCount = ORDERS.filter((o) => o.status === "credit").length;
 
   const STATS = [
-    { label: "Total orders", value: ORDERS.length, icon: ShoppingCart, tint: COLORS.forest },
-    { label: "Total sales", value: `Rs ${totalSales.toLocaleString()}`, icon: Wallet, tint: COLORS.leaf },
-    { label: "Commission earned", value: `Rs ${totalCommission.toLocaleString()}`, icon: Percent, tint: COLORS.gold },
-    { label: "Pending (credit)", value: pendingCount, icon: Clock, tint: "#a35c2b" },
+    { label: t("agent.orders.stats.totalOrders"), value: ORDERS.length, icon: ShoppingCart, tint: COLORS.forest },
+    { label: t("agent.orders.stats.totalSales"), value: formatAgentCurrency(totalSales, t), icon: Wallet, tint: COLORS.leaf },
+    { label: t("agent.orders.stats.commissionEarned"), value: formatAgentCurrency(totalCommission, t), icon: Percent, tint: COLORS.gold },
+    { label: t("agent.orders.stats.pendingCredit"), value: pendingCount, icon: Clock, tint: "#a35c2b" },
   ];
 
   return (
-    <div className="font-body" style={{ backgroundColor: COLORS.cream }}>
+    <div className="font-body" style={{ backgroundColor: COLORS.cream }} dir={isUr ? "rtl" : "ltr"}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
-        .font-display { font-family: 'Fraunces', serif; }
-        .font-body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        .font-display { font-family: ${isUr ? "'Noto Nastaliq Urdu', serif" : "'Fraunces', serif"}; }
+        .font-body { font-family: ${isUr ? "'Noto Nastaliq Urdu', serif" : "'Inter', sans-serif"}; }
       `}</style>
 
       {/* header */}
-      <div className="mb-6">
-        <h1 className="font-display text-2xl sm:text-3xl" style={{ color: COLORS.ink }}>
-          Orders
-        </h1>
-        <p className="text-sm mt-1" style={{ color: COLORS.sub }}>
-          Every order placed against your consigned inventory.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl sm:text-3xl" style={{ color: COLORS.ink }}>
+            {t("agent.orders.title")}
+          </h1>
+          <p className="text-sm mt-1" style={{ color: COLORS.sub }}>
+            {t("agent.orders.subtitle")}
+          </p>
+        </div>
+        <LanguageSelector />
       </div>
 
       {/* stat cards */}
@@ -104,7 +128,7 @@ export default function AgentOrders() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by order, consignment, or buyer..."
+            placeholder={t("agent.orders.searchPlaceholder")}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg border text-sm outline-none"
             style={{ borderColor: COLORS.border, backgroundColor: "white" }}
           />
@@ -121,7 +145,7 @@ export default function AgentOrders() {
                   : { color: COLORS.sub, borderColor: COLORS.border }
               }
             >
-              {f}
+              {FILTER_LABEL[f]}
             </button>
           ))}
         </div>
@@ -135,15 +159,15 @@ export default function AgentOrders() {
         <table className="w-full text-sm min-w-[820px]">
           <thead>
             <tr style={{ color: COLORS.sub }}>
-              <th className="text-left font-medium px-5 py-3">Order</th>
-              <th className="text-left font-medium px-5 py-3">Consignment</th>
-              <th className="text-left font-medium px-5 py-3">Buyer</th>
-              <th className="text-left font-medium px-5 py-3">Product</th>
-              <th className="text-left font-medium px-5 py-3">Qty</th>
-              <th className="text-left font-medium px-5 py-3">Amount</th>
-              <th className="text-left font-medium px-5 py-3">Commission</th>
-              <th className="text-left font-medium px-5 py-3">Payment</th>
-              <th className="text-left font-medium px-5 py-3">Status</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.order")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.consignment")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.buyer")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.product")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.qty")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.amount")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.commission")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.payment")}</th>
+              <th className="text-left font-medium px-5 py-3">{t("agent.common.table.status")}</th>
             </tr>
           </thead>
           <tbody>
@@ -156,22 +180,22 @@ export default function AgentOrders() {
                   {o.consignId}
                 </td>
                 <td className="px-5 py-3" style={{ color: COLORS.ink }}>
-                  {o.buyer}
+                  {trader(o.buyer)}
                 </td>
                 <td className="px-5 py-3" style={{ color: COLORS.sub }}>
-                  {o.product}
+                  {product(o.product)}
                 </td>
                 <td className="px-5 py-3" style={{ color: COLORS.sub }}>
-                  {o.qty}
+                  {o.qty.toLocaleString()} {isUr ? "کلوگرام" : "kg"}
                 </td>
                 <td className="px-5 py-3" style={{ color: COLORS.ink }}>
-                  Rs {o.amount.toLocaleString()}
+                  {formatAgentCurrency(o.amount, t)}
                 </td>
                 <td className="px-5 py-3 font-medium" style={{ color: COLORS.leaf }}>
-                  Rs {o.commission.toLocaleString()}
+                  {formatAgentCurrency(o.commission, t)}
                 </td>
                 <td className="px-5 py-3" style={{ color: COLORS.sub }}>
-                  {o.payment}
+                  {PAYMENT_LABEL[o.payment]}
                 </td>
                 <td className="px-5 py-3">
                   <span
@@ -181,7 +205,7 @@ export default function AgentOrders() {
                       color: STATUS_STYLE[o.status].text,
                     }}
                   >
-                    {o.status}
+                    {STATUS_STYLE[o.status].label}
                   </span>
                 </td>
               </tr>
@@ -190,7 +214,7 @@ export default function AgentOrders() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-5 py-10 text-center" style={{ color: COLORS.sub }}>
-                  No orders match your search.
+                  {t("agent.orders.noResults")}
                 </td>
               </tr>
             )}
