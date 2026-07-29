@@ -8,7 +8,7 @@ from app.models.consignment import Consignment
 from app.models.payment import Payment
 from app.models.party import Party
 from app.schemas.order import OrderCreate, OrderStatusUpdate
-from app.services.consignment_service import get_consignment
+from app.services.consignment_service import get_consignment, get_consignment_for_update
 from app.services.commission_service import create_commission_for_order, commission_exists_for_order
 
 
@@ -56,7 +56,10 @@ async def create_order(db: AsyncSession, buyer: Party, data: OrderCreate) -> Ord
     consignment's selling_price_per_unit — NEVER accepted from the
     client, which would let a buyer submit a tampered price.
     """
-    consignment = await get_consignment(db, data.consigned_id)
+    # locked fetch — holds the row until commit, so two buyers can't
+    # both pass the availability check against the same consignment
+    # at the same time (see gap #4)
+    consignment = await get_consignment_for_update(db, data.consigned_id)
 
     if consignment.status != "confirmed":
         raise HTTPException(status_code=400, detail="This consignment is not available for ordering")

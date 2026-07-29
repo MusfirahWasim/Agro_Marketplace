@@ -2,6 +2,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.models.party import Party
@@ -44,7 +45,17 @@ async def signup(db: AsyncSession, data: SignupRequest) -> Party:
         is_registered=True,
     )
     db.add(party)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Backstop for the race-condition window between the check above
+        # and this insert — two signups with the same email arriving at
+        # the same instant could both pass the SELECT check; the DB's
+        # own UNIQUE constraint on parties.email is the real guarantee,
+        # this just turns that rejection into a clean 400 instead of an
+        # unhandled 500.
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Email already registered")
     await db.refresh(party)
     return party
 

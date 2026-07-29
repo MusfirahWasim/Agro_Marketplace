@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from app.models.consignment import Consignment
 from app.models.party import Party
 from app.schemas.consignment import ConsignmentCreate, ConsignmentStatusUpdate
-from app.services.supply_service import get_supply, deduct_stock
+from app.services.supply_service import get_supply, get_supply_for_update, deduct_stock
 
 
 async def create_consignment(db: AsyncSession, agent: Party, data: ConsignmentCreate) -> Consignment:
@@ -18,7 +18,10 @@ async def create_consignment(db: AsyncSession, agent: Party, data: ConsignmentCr
     accepted from the client — a request can't claim a supply it
     doesn't actually reference.
     """
-    supply = await get_supply(db, data.supply_id)
+    # locked fetch — holds the row until commit, so two agents can't
+    # both pass the stock-availability check against the same supply
+    # at the same time (see gap #4)
+    supply = await get_supply_for_update(db, data.supply_id)
 
     # deduct_stock validates quantity <= current_stock and raises if not;
     # it does not commit, so this and the insert below are one transaction
@@ -46,6 +49,25 @@ async def create_consignment(db: AsyncSession, agent: Party, data: ConsignmentCr
 async def get_consignment(db: AsyncSession, consigned_id: int) -> Consignment:
     result = await db.execute(
         select(Consignment).where(Consignment.consigned_id == consigned_id)
+    )
+    consignment = result.scalar_one_or_none()
+    if not consignment:
+        raise HTTPException(status_code=404, detail="Consignment not found")
+    return consignment
+
+
+async def get_consignment_for_update(db: AsyncSession, consigned_id: int) -> Consignment:
+    """
+    Same as get_consignment, but takes a row-level lock (SELECT ... FOR
+    UPDATE). Use this ONLY right before deducting quantity_remaining
+    (order_service.create_order) — two buyers ordering the same
+    consignment at the same instant would otherwise both pass the
+    availability check before either commits, overselling it.
+    """
+    result = await db.execute(
+        select(Consignment)
+        .where(Consignment.consigned_id == consigned_id)
+        .with_for_update()
     )
     consignment = result.scalar_one_or_none()
     if not consignment:

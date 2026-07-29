@@ -19,7 +19,7 @@ class Party(Base):
     name = Column(String(50), nullable=False)
     phone = Column(String(13), nullable=True)
     cnic = Column(String(15), nullable=True)
-    email = Column(String(50), nullable=True)
+    email = Column(String(50), unique=True, nullable=True)
     password_hash = Column(String(255), nullable=True)
 
     active_status = Column(Boolean, nullable=False, server_default="1")

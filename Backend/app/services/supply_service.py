@@ -28,6 +28,23 @@ async def get_supply(db: AsyncSession, supply_id: int) -> Supply:
     return supply
 
 
+async def get_supply_for_update(db: AsyncSession, supply_id: int) -> Supply:
+    """
+    Same as get_supply, but takes a row-level lock (SELECT ... FOR
+    UPDATE) so a concurrent request touching the same supply has to
+    wait until this transaction commits or rolls back. Use this ONLY
+    right before deducting stock (consignment_service.create_consignment)
+    — using it for plain reads would serialize requests for no benefit.
+    """
+    result = await db.execute(
+        select(Supply).where(Supply.supply_id == supply_id).with_for_update()
+    )
+    supply = result.scalar_one_or_none()
+    if not supply:
+        raise HTTPException(status_code=404, detail="Supply not found")
+    return supply
+
+
 async def list_supplies_for_supplier(db: AsyncSession, supplier_id: int) -> List[Supply]:
     """SupplierSupplies.jsx — a supplier's own inventory list."""
     result = await db.execute(select(Supply).where(Supply.supplier_id == supplier_id))

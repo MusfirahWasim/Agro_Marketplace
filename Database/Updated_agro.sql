@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS parties (
     name                        VARCHAR(50) NOT NULL,
     phone                       VARCHAR(13),
     cnic                        VARCHAR(15),
-    email                       VARCHAR(50),
+    email                       VARCHAR(50) UNIQUE,
     password_hash               VARCHAR(255),
     active_status               TINYINT(1) DEFAULT 1,
     credit_limit                DECIMAL(12,2) DEFAULT 0,
