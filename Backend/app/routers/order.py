@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -51,9 +51,13 @@ async def list_orders_against_my_consignments(
 
 
 @router.get("/", response_model=List[OrderRead], dependencies=[Depends(require_admin)])
-async def list_all_orders(db: AsyncSession = Depends(get_db)):
+async def list_all_orders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
     """AdminOrdersOverview.jsx — every order, unfiltered. Same N+1 note as above."""
-    return await order_service.list_all_orders(db)
+    return await order_service.list_all_orders(db, skip, limit)
 
 
 @router.get("/{order_id}", response_model=OrderRead)

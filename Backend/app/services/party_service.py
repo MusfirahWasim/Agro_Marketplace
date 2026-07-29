@@ -36,11 +36,14 @@ async def change_password(db: AsyncSession, party: Party, data: ChangePasswordRe
     await db.commit()
 
 
-async def list_parties(db: AsyncSession, party_type: Optional[str] = None) -> List[Party]:
+async def list_parties(
+    db: AsyncSession, party_type: Optional[str] = None, skip: int = 0, limit: int = 100
+) -> List[Party]:
     """Admin: AdminUsers.jsx — list all parties, optionally filtered by role."""
     query = select(Party)
     if party_type:
         query = query.where(Party.party_type == party_type)
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 

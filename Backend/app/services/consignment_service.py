@@ -106,6 +106,19 @@ async def list_marketplace_consignments(db: AsyncSession) -> List[Consignment]:
     return result.scalars().all()
 
 
+# Explicit state machine — completed/cancelled are terminal (no
+# transitions out of them). This replaces the earlier narrower guard
+# that only checked the 'cancelled' target specifically; now ANY
+# invalid transition (e.g. pending -> completed directly, skipping
+# confirmation) is rejected, not just re-cancelling.
+VALID_CONSIGNMENT_TRANSITIONS = {
+    "pending": {"confirmed", "cancelled"},
+    "confirmed": {"completed", "cancelled"},
+    "completed": set(),
+    "cancelled": set(),
+}
+
+
 async def update_status(
     db: AsyncSession, consigned_id: int, agent: Party, data: ConsignmentStatusUpdate
 ) -> Consignment:
@@ -113,12 +126,13 @@ async def update_status(
     if consignment.agent_id != agent.party_id:
         raise HTTPException(status_code=403, detail="This consignment does not belong to you")
 
+    if data.status not in VALID_CONSIGNMENT_TRANSITIONS.get(consignment.status, set()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot change consignment status from '{consignment.status}' to '{data.status}'",
+        )
+
     if data.status == "cancelled":
-        if consignment.status in ("completed", "cancelled"):
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot cancel a consignment that is already completed or cancelled",
-            )
         # Return whatever is still unsold back to the supplier's stock.
         # quantity_sold (already bought by buyers) is NOT touched here —
         # only the unsold remainder goes back.

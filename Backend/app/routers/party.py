@@ -45,9 +45,11 @@ async def list_all_parties(
     party_type: Optional[Literal["S", "B", "CA", "A"]] = Query(
         None, description="Filter by role"
     ),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
-    return await party_service.list_parties(db, party_type)
+    return await party_service.list_parties(db, party_type, skip, limit)
 
 
 @router.get(

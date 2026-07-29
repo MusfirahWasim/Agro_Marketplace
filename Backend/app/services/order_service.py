@@ -118,34 +118,53 @@ async def list_orders_for_agent(db: AsyncSession, agent_id: int) -> List[Order]:
     return result.scalars().all()
 
 
-async def list_all_orders(db: AsyncSession) -> List[Order]:
+async def list_all_orders(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[Order]:
     """Admin: AdminOrdersOverview.jsx — every order in the system, unfiltered."""
-    result = await db.execute(select(Order))
+    result = await db.execute(select(Order).offset(skip).limit(limit))
     return result.scalars().all()
+
+
+# Explicit state machine — completed/cancelled are terminal. NOTE: this
+# now also blocks completed -> pending, which was previously allowed
+# (that was the exact scenario that exposed the duplicate-commission
+# bug earlier). Blocking it here is a stricter, more correct guarantee
+# than the DB-existence-check fix alone — that fix still holds as a
+# second line of defense, but this stops the toggle from being
+# possible in the first place.
+VALID_ORDER_TRANSITIONS = {
+    "pending": {"confirmed", "cancelled"},
+    "confirmed": {"completed", "cancelled"},
+    "completed": set(),
+    "cancelled": set(),
+}
 
 
 async def update_status(db: AsyncSession, order_id: int, data: OrderStatusUpdate) -> Order:
     """
     Transitioning to 'completed' creates a commission — guarded by an
-    actual DB check (commission_exists_for_order), not a before/after
-    status flag, so toggling completed -> pending -> completed can
-    never create a second commission row for the same order.
+    actual DB check (commission_exists_for_order) as a second line of
+    defense, in addition to the transition map above now making
+    completed a true terminal state.
 
     Transitioning to 'cancelled' restores the ordered quantity back to
     the consignment (quantity_sold/quantity_remaining), reopening the
     consignment if it had auto-completed from selling out. Mirrors the
-    same restore-and-guard pattern already used in
-    consignment_service.update_status, for consistency.
+    same restore pattern already used in consignment_service.update_status.
     """
     order = await get_order(db, order_id)
 
-    if data.status == "cancelled":
-        if order.status in ("completed", "cancelled"):
+    if data.status not in VALID_ORDER_TRANSITIONS.get(order.status, set()):
+        if order.status == "completed" and data.status == "cancelled":
             raise HTTPException(
                 status_code=400,
-                detail="Cannot cancel an order that is already completed or cancelled "
-                "(a completed order needs a refund, not a cancellation)",
+                detail="Cannot cancel a completed order — process a refund instead",
             )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot change order status from '{order.status}' to '{data.status}'",
+        )
+
+    if data.status == "cancelled":
         consignment = await get_consignment(db, order.consigned_id)
         consignment.quantity_sold -= order.quantity_ordered
         consignment.quantity_remaining += order.quantity_ordered

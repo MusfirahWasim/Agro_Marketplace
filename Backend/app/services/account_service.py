@@ -76,7 +76,7 @@ async def list_ledger_for_party(db: AsyncSession, party_id: int, party_type: str
     return result.scalars().all()
 
 
-async def list_all_ledger_entries(db: AsyncSession) -> List[Account]:
+async def list_all_ledger_entries(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[Account]:
     """AdminAccountsLedger.jsx — the full, unfiltered ledger."""
-    result = await db.execute(select(Account).order_by(Account.created_at))
+    result = await db.execute(select(Account).order_by(Account.created_at).offset(skip).limit(limit))
     return result.scalars().all()
