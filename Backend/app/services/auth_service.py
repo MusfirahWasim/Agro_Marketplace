@@ -18,6 +18,7 @@ from app.core.security import (
     verify_password,
     create_access_token,
     create_refresh_token,
+    decode_token,
 )
 from app.utils.notifications import send_otp_email
 
@@ -48,6 +49,20 @@ async def signup(db: AsyncSession, data: SignupRequest) -> Party:
     return party
 
 
+def _build_token_pair(party: Party) -> dict:
+    # token payload carries BOTH halves of the composite key —
+    # dependencies.py's get_current_party relies on party_type being
+    # present as its own claim, not just embedded in sub
+    token_data = {"sub": str(party.party_id), "party_type": party.party_type}
+    return {
+        "access_token": create_access_token(token_data),
+        "refresh_token": create_refresh_token(token_data),
+        "party_id": party.party_id,
+        "party_type": party.party_type,
+        "name": party.name,
+    }
+
+
 async def login(db: AsyncSession, data: LoginRequest) -> dict:
     result = await db.execute(select(Party).where(Party.email == data.email))
     party = result.scalar_one_or_none()
@@ -60,20 +75,37 @@ async def login(db: AsyncSession, data: LoginRequest) -> dict:
     if not party.active_status:
         raise HTTPException(status_code=403, detail="This account has been deactivated")
 
-    # token payload carries BOTH halves of the composite key —
-    # dependencies.py's get_current_party relies on party_type being
-    # present as its own claim, not just embedded in sub
-    token_data = {"sub": str(party.party_id), "party_type": party.party_type}
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
+    return _build_token_pair(party)
 
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "party_id": party.party_id,
-        "party_type": party.party_type,
-        "name": party.name,
-    }
+
+async def refresh_access_token(db: AsyncSession, refresh_token: str) -> dict:
+    """
+    Exchanges a valid, unexpired refresh token for a brand new
+    access/refresh pair. NOTE: this doesn't blacklist the old refresh
+    token — there's no token-revocation store yet, so a previously
+    issued refresh token technically still works until it expires on
+    its own. Fine for MVP, worth revisiting before production.
+    """
+    payload = decode_token(refresh_token)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    party_id = payload.get("sub")
+    party_type = payload.get("party_type")
+    if party_id is None or party_type is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    result = await db.execute(
+        select(Party).where(
+            Party.party_id == int(party_id), Party.party_type == party_type
+        )
+    )
+    party = result.scalar_one_or_none()
+
+    if not party or not party.active_status:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    return _build_token_pair(party)
 
 
 async def request_password_reset(db: AsyncSession, data: ForgotPasswordRequest) -> None:

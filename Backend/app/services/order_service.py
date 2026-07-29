@@ -9,7 +9,44 @@ from app.models.payment import Payment
 from app.models.party import Party
 from app.schemas.order import OrderCreate, OrderStatusUpdate
 from app.services.consignment_service import get_consignment
-from app.services.commission_service import create_commission_for_order
+from app.services.commission_service import create_commission_for_order, commission_exists_for_order
+
+
+async def verify_order_access(
+    db: AsyncSession,
+    order: Order,
+    party: Party,
+    allow_buyer: bool = True,
+    allow_agent: bool = True,
+) -> None:
+    """
+    Raises 403 unless `party` has a legitimate reason to view/act on
+    this order. Reused by order.py's GET/PATCH {order_id} routes and
+    payment.py's GET /order/{order_id} route — this is the single
+    place that logic lives, rather than duplicated per endpoint.
+
+    Admin is always allowed. Buyer is allowed only if they placed the
+    order. Agent is allowed only if they own the consignment the order
+    was placed against (one extra query, since agent_id isn't directly
+    on Order).
+    """
+    if party.party_type == "A":
+        return
+
+    if allow_buyer and party.party_type == "B" and order.buyer_id == party.party_id:
+        return
+
+    if allow_agent and party.party_type == "CA":
+        result = await db.execute(
+            select(Consignment.agent_id).where(
+                Consignment.consigned_id == order.consigned_id
+            )
+        )
+        agent_id = result.scalar_one_or_none()
+        if agent_id == party.party_id:
+            return
+
+    raise HTTPException(status_code=403, detail="You do not have access to this order")
 
 
 async def create_order(db: AsyncSession, buyer: Party, data: OrderCreate) -> Order:
@@ -78,18 +115,43 @@ async def list_orders_for_agent(db: AsyncSession, agent_id: int) -> List[Order]:
     return result.scalars().all()
 
 
+async def list_all_orders(db: AsyncSession) -> List[Order]:
+    """Admin: AdminOrdersOverview.jsx — every order in the system, unfiltered."""
+    result = await db.execute(select(Order))
+    return result.scalars().all()
+
+
 async def update_status(db: AsyncSession, order_id: int, data: OrderStatusUpdate) -> Order:
     """
-    Transitioning an order to 'completed' is what triggers commission
-    creation — this is the one status change with a side effect, all
-    others (confirmed/cancelled) just update the field.
+    Transitioning to 'completed' creates a commission — guarded by an
+    actual DB check (commission_exists_for_order), not a before/after
+    status flag, so toggling completed -> pending -> completed can
+    never create a second commission row for the same order.
+
+    Transitioning to 'cancelled' restores the ordered quantity back to
+    the consignment (quantity_sold/quantity_remaining), reopening the
+    consignment if it had auto-completed from selling out. Mirrors the
+    same restore-and-guard pattern already used in
+    consignment_service.update_status, for consistency.
     """
     order = await get_order(db, order_id)
-    was_completed_before = order.status == "completed"
+
+    if data.status == "cancelled":
+        if order.status in ("completed", "cancelled"):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot cancel an order that is already completed or cancelled "
+                "(a completed order needs a refund, not a cancellation)",
+            )
+        consignment = await get_consignment(db, order.consigned_id)
+        consignment.quantity_sold -= order.quantity_ordered
+        consignment.quantity_remaining += order.quantity_ordered
+        if consignment.status == "completed":
+            consignment.status = "confirmed"
 
     order.status = data.status
 
-    if data.status == "completed" and not was_completed_before:
+    if data.status == "completed" and not await commission_exists_for_order(db, order.order_id):
         await create_commission_for_order(db, order)
 
     await db.commit()

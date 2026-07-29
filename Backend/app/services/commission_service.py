@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from fastapi import HTTPException
 
 from app.models.commission import Commission
 from app.models.order import Order
@@ -9,6 +10,30 @@ from app.models.consignment import Consignment
 from app.models.account import Account
 from app.core.config import settings
 from app.services.account_service import record_ledger_entry
+
+
+async def get_commission(db: AsyncSession, commission_id: int) -> Commission:
+    result = await db.execute(
+        select(Commission).where(Commission.commission_id == commission_id)
+    )
+    commission = result.scalar_one_or_none()
+    if not commission:
+        raise HTTPException(status_code=404, detail="Commission not found")
+    return commission
+
+
+async def commission_exists_for_order(db: AsyncSession, order_id: int) -> bool:
+    """
+    The source-of-truth check for "has a commission already been
+    created for this order" — used instead of tracking a before/after
+    status flag, since a flag snapshot can't see across multiple status
+    toggles (completed -> pending -> completed would fool a flag, but
+    not this direct DB check).
+    """
+    result = await db.execute(
+        select(Commission.commission_id).where(Commission.order_id == order_id)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def create_commission_for_order(db: AsyncSession, order: Order) -> Commission:

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import engine
-from app.routers import auth
+from app.routers import auth, party, supply, consignment, order, payment, account, commission, admin
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +46,14 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(party.router)
+app.include_router(supply.router)
+app.include_router(consignment.router)
+app.include_router(order.router)
+app.include_router(payment.router)
+app.include_router(account.router)
+app.include_router(commission.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")
