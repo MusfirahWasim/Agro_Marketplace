@@ -1,14 +1,26 @@
 import { useState } from "react";
-import { Leaf, Mail, Lock, Eye, EyeOff, ArrowRight, Wheat } from "lucide-react";
+import { Leaf, Mail, Lock, Eye, EyeOff, ArrowRight, Wheat, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
+import { login } from "../handlers/auth";
 
 const ROLES = [
   { key: "supplier", labelKey: "common.roles.supplier" },
   { key: "agent", labelKey: "common.roles.agent" },
   { key: "buyer", labelKey: "common.roles.buyer" },
 ];
+
+// Maps the REAL party_type returned by the backend to a route — this is
+// what actually decides where the user lands, not the tile they clicked.
+// A selecting "Buyer" but logging in with a Supplier account will still
+// correctly land on /supplier/dashboard once the backend responds.
+const ROLE_ROUTES = {
+  S: "/supplier/dashboard",
+  CA: "/agent/dashboard",
+  B: "/buyer/marketplace",
+  A: "/admin/dashboard",
+};
 
 const COLORS = {
   forest: "#1e4620",
@@ -27,14 +39,27 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Login attempt:", { role, email, password });
+    setError(null);
+    setLoading(true);
 
-    // Temporary navigation
-    navigate("/buyer/marketplace");
+    const { data, error: loginError } = await login({ email, password });
+
+    setLoading(false);
+
+    if (loginError) {
+      // Raw message from the backend (e.g. "Invalid email or password") —
+      // not run through t(), since API error text isn't localized yet.
+      setError(loginError);
+      return;
+    }
+
+    navigate(ROLE_ROUTES[data.party_type] || "/login");
   };
 
   const activeRoleLabel = t(ROLES.find((r) => r.key === role)?.labelKey);
@@ -163,7 +188,9 @@ export default function LoginPage() {
             {t("login.subtitle")}
           </p>
 
-          {/* role selector */}
+          {/* role selector — cosmetic only now: it sets the button label,
+              but actual navigation after login is driven entirely by the
+              real party_type the backend returns, not this selection */}
           <div
             className="grid grid-cols-3 gap-2 p-1 rounded-xl mb-7"
             style={{ backgroundColor: COLORS.greige }}
@@ -250,24 +277,48 @@ export default function LoginPage() {
                 <input type="checkbox" className="rounded" />
                 {t("login.rememberMe")}
               </label>
-              <a href="#" className="text-xs font-medium" style={{ color: COLORS.leaf }}>
+              {/* Forgot-password link intentionally inert — no email
+                  service exists yet to deliver the OTP, so wiring this
+                  to /forgot-password would lead to a dead end anyway. */}
+              <a
+                href="#"
+                onClick={(e) => e.preventDefault()}
+                className="text-xs font-medium"
+                style={{ color: COLORS.leaf }}
+              >
                 {t("login.forgotPassword")}
               </a>
             </div>
 
+            {error && (
+              <div
+                className="text-sm rounded-lg px-3 py-2"
+                style={{ backgroundColor: "#faeaea", color: "#b5544a" }}
+              >
+                {error}
+              </div>
+            )}
+
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-medium text-sm mt-2 transition-transform active:scale-[0.99]"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-medium text-sm mt-2 transition-transform active:scale-[0.99] disabled:opacity-70"
               style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
             >
-              {t("login.signInAs", { role: activeRoleLabel })}
-              <ArrowRight size={16} className={isRTL ? "rotate-180" : ""} />
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <>
+                  {t("login.signInAs", { role: activeRoleLabel })}
+                  <ArrowRight size={16} className={isRTL ? "rotate-180" : ""} />
+                </>
+              )}
             </button>
           </form>
 
           <p className="text-center text-sm mt-8" style={{ color: "#6b7568" }}>
             {t("login.newToAisamms")}{" "}
-            <a href="#" className="font-medium" style={{ color: COLORS.forest }}>
+            <a href="/signup" className="font-medium" style={{ color: COLORS.forest }}>
               {t("login.contactAdmin")}
             </a>
           </p>

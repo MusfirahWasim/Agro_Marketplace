@@ -67,7 +67,7 @@ export const translations = {
       forgotPassword: "Forgot password?",
       signInAs: "Sign in as {{role}}",
       newToAisamms: "New to AISAMMS?",
-      contactAdmin: "Contact your market administrator",
+      contactAdmin: "Sign up to AISAMMS",
       hero: {
         title: "From farm gate to market crate",
         subtitle:
@@ -725,7 +725,7 @@ export const translations = {
       forgotPassword: "پاس ورڈ بھول گئے؟",
       signInAs: "بطور {{role}} سائن ان کریں",
       newToAisamms: "AISAMMS پر نئے ہیں؟",
-      contactAdmin: "اپنے مارکیٹ ایڈمنسٹریٹر سے رابطہ کریں",
+      contactAdmin: "AISAMMS میں سائن اپ کریں",
       hero: {
         title: "کھیت سے منڈی تک",
         subtitle:

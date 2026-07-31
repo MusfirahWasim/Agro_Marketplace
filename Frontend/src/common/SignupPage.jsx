@@ -10,6 +10,8 @@ import {
   Building2,
   ArrowRight,
   Check,
+  Leaf,
+  Wheat,
 } from "lucide-react";
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
@@ -38,6 +40,17 @@ const ROLE_ORG_FIELD = {
   supplier: { name: "orgName", labelKey: "signup.orgLabel.supplier", placeholderKey: "signup.orgPlaceholder.supplier" },
   agent: { name: "orgName", labelKey: "signup.orgLabel.agent", placeholderKey: "signup.orgPlaceholder.agent" },
   buyer: null,
+};
+
+// Only used by the left brand panel below, to match LoginPage.jsx exactly.
+// The form on the right still uses this file's original Tailwind
+// arbitrary-value colors (bg-[#1e4620] etc.) — left untouched, not in scope.
+const COLORS = {
+  forest: "#1e4620",
+  forestDark: "#122b15",
+  leaf: "#4d8b3d",
+  gold: "#f0b84c",
+  cream: "#faf8f2",
 };
 
 export default function SignupPage() {
@@ -108,60 +121,83 @@ export default function SignupPage() {
   return (
     <div dir="ltr" className="min-h-screen w-full flex bg-[#faf9f5]">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        .font-display { font-family: 'Fraunces', serif; }
+        .font-body { font-family: 'Inter', sans-serif; }
         .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; }
       `}</style>
 
-      {/* LEFT — brand / imagery panel. Never moves, never flips. */}
-      <div className="hidden lg:flex lg:w-[46%] relative bg-[#1e4620] text-white flex-col justify-between px-14 py-12 overflow-hidden">
-        {/* subtle organic texture */}
+      {/* LEFT — hero / brand panel. Matches LoginPage.jsx exactly —
+          only the title/subtitle text differs (signup's own copy). */}
+      <div
+        className="hidden lg:flex lg:w-1/2 relative flex-col justify-between overflow-hidden font-body"
+        style={{ backgroundColor: COLORS.forest }}
+      >
+        {/* subtle organic texture backdrop */}
         <div
-          className="absolute inset-0 opacity-[0.07] pointer-events-none"
+          className="absolute inset-0 opacity-[0.08]"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 20% 20%, white 0, transparent 40%), radial-gradient(circle at 80% 60%, white 0, transparent 35%)",
+              "radial-gradient(circle at 20% 20%, white 0, transparent 40%), radial-gradient(circle at 80% 70%, white 0, transparent 35%)",
           }}
         />
 
-        <div className="relative flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-[#f0b84c] flex items-center justify-center text-[#1e4620] font-bold text-lg">
-            A
+        <div className="relative z-10 px-12 pt-12 flex items-center gap-2">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: COLORS.gold }}
+          >
+            <Leaf size={18} color={COLORS.forestDark} />
           </div>
-          <span className="font-serif text-2xl tracking-wide">AISAMMS</span>
+          <span className="font-display text-white text-xl tracking-wide">AISAMMS</span>
         </div>
 
-        <div className="relative flex flex-col items-center">
-          <div className="relative w-[280px] h-[280px] rounded-full border-4 border-[#f0b84c] overflow-hidden bg-white shadow-xl">
-            <img
-              src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=800&auto=format&fit=crop"
-              alt="Terraced farmland at golden hour"
-              className="w-full h-full object-cover"
-            />
+        <div className="relative z-10 px-12 flex flex-col items-center">
+          {/* circular framed image with overlapping leaf badge */}
+          <div className="relative w-72 h-72 mb-10">
+            <div
+              className="w-full h-full rounded-full overflow-hidden border-4"
+              style={{ borderColor: COLORS.gold }}
+            >
+              <img
+                src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600&q=80"
+                alt="Terraced agricultural fields"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div
+              className="absolute -bottom-3 -right-3 w-20 h-20 rounded-full flex flex-col items-center justify-center border-4 shadow-lg"
+              style={{ backgroundColor: COLORS.leaf, borderColor: COLORS.forest }}
+            >
+              <Wheat size={22} color="white" />
+              <span className="text-white text-[9px] font-medium mt-0.5">Est. Fresh</span>
+            </div>
           </div>
-          <div className="absolute -bottom-2 right-8 h-16 w-16 rounded-full bg-[#3f8f43] border-4 border-[#1e4620] flex flex-col items-center justify-center text-[11px] font-semibold leading-tight text-center shadow-lg">
-            <span aria-hidden>🌾</span>
-            <span>{t("signup.hero.newGrower")}</span>
-          </div>
-        </div>
 
-        <div className="relative">
-          <h1 className={`text-4xl leading-tight mb-4 ${isRTL ? "font-urdu" : "font-serif"}`}>
+          <h1
+            className={`text-white text-3xl text-center leading-snug mb-3 ${isRTL ? "font-urdu" : "font-display"}`}
+          >
             {t("signup.hero.title1")}
             <br /> {t("signup.hero.title2")}
           </h1>
-          <p className="text-white/80 text-base leading-relaxed max-w-md mb-8">
+          <p className="text-center max-w-sm" style={{ color: "#c9d9c2" }}>
             {t("signup.hero.subtitle")}
           </p>
-          <div className="flex items-center gap-10">
-            <div>
-              <div className="text-3xl font-bold">1,200+</div>
-              <div className="text-white/70 text-sm">{t("common.stats.consignmentsTracked")}</div>
-            </div>
-            <div className="h-10 w-px bg-white/25" />
-            <div>
-              <div className="text-3xl font-bold">98%</div>
-              <div className="text-white/70 text-sm">{t("common.stats.paymentTraceability")}</div>
-            </div>
+        </div>
+
+        <div className="relative z-10 px-12 pb-12 flex items-center gap-10">
+          <div>
+            <p className="font-display text-2xl text-white">1,200+</p>
+            <p className="text-xs" style={{ color: "#a9c19f" }}>
+              {t("common.stats.consignmentsTracked")}
+            </p>
+          </div>
+          <div className="w-px h-8" style={{ backgroundColor: "#3a5c3a" }} />
+          <div>
+            <p className="font-display text-2xl text-white">98%</p>
+            <p className="text-xs" style={{ color: "#a9c19f" }}>
+              {t("common.stats.paymentTraceability")}
+            </p>
           </div>
         </div>
       </div>
