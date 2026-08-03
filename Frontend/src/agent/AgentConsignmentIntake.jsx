@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Truck,
   PackagePlus,
@@ -6,309 +6,461 @@ import {
   Users,
   ChevronDown,
   Search,
+  Loader2,
+  AlertCircle,
+  Check,
+  X,
 } from "lucide-react";
 import { useLanguage } from "../i18n/LanguageContext";
-import LanguageSelector from "../i18n/LanguageSelector";
-import { localizeTrader, localizeProduct, formatAgentDate } from "./agentLocale";
+import { localizeTrader, formatAgentDate } from "./agentLocale";
+import { listAvailableSupplies } from "../handlers/supply";
+import { createConsignment, listMyConsignments, updateConsignmentStatus } from "../handlers/consignment";
 
 /**
  * AgentConsignmentIntake.jsx
- * Commission Agent — recording stock received from suppliers (new consignments
- * coming into the agent's inventory). Fully localized (English / Urdu),
- * including supplier and product names and dates.
+ * Commission Agent — creating a new consignment agreement against an
+ * existing supply record, and reviewing/confirming recent intakes.
  *
- * Data below is illustrative — wire the form's onSubmit to lib/api.js
- * (e.g. createConsignmentIntake()) and swap MOCK_INTAKES for
- * getAgentConsignmentIntakes() once the endpoints are ready.
+ * IMPORTANT SHAPE CHANGE FROM THE OLD MOCK: this is NOT free-text "log a
+ * delivery." createConsignment() requires a real supply_id — the supplier
+ * already created that supply record (with their own cost_per_unit) via
+ * supply.js. The agent only sets: quantity_consigned, selling_price_per_unit
+ * (what THEY will resell at — separate from the supplier's cost), an
+ * optional commission_rate (falls back to platform default if omitted),
+ * and payment_term.
+ *
+ * KNOWN GAP: there is no handler anywhere in src/handlers/ that lets a
+ * non-admin list suppliers. listAvailableSupplies(supplierId) needs a
+ * supplierId, but nothing provides one. Until a real supplier-directory
+ * endpoint exists, this screen takes a manual numeric Supplier ID input —
+ * functional against the real API, but bad UX. Swap in a real picker once
+ * that endpoint exists.
+ *
+ * KNOWN GAP: payment_term's valid values aren't documented in any handler
+ * file — left as free text rather than guessing an enum.
+ *
+ * STATUS MODEL: consignment.js documents 4 real states with specific valid
+ * transitions — pending -> confirmed/cancelled, confirmed -> completed/
+ * cancelled. The old mock only had 3 (confirmed/pending/rejected). Fixed
+ * to the real 4-state model below. Only a confirmed consignment with stock
+ * left becomes visible to buyers in the marketplace (per consignment.js).
+ *
+ * Confirm/cancel actions on pending rows are wired here since this is
+ * where an agent would naturally act on an intake they just created —
+ * flag if that action actually belongs on a different screen instead.
  */
 
 const COLORS = {
-  pageBg: "#faf8f2",
-  card: "#ffffff",
-  border: "#ece8de",
   forest: "#1e4620",
-  sage: "#4c8b3c",
+  forestDark: "#122b15",
+  leaf: "#4d8b3d",
   gold: "#f0b84c",
-  goldHover: "#e5aa38",
-  heading: "#16211a",
-  bodyText: "#5b6660",
-  mutedText: "#8b948d",
+  goldDark: "#d99e2f",
+  cream: "#faf8f2",
+  greige: "#eef0e9",
+  ink: "#17231a",
+  border: "#d9ddce",
+  muted: "#6b7568",
+  iconMuted: "#909685",
+  label: "#4a5240",
+  errorBg: "#faeaea",
+  errorText: "#b5544a",
 };
 
-const SUPPLIERS = ["Ahmed Farms", "Noor Agro", "Green Basket Growers", "Bilal Supplies"];
-
-const MOCK_INTAKES = [
-  { id: "CN-1042", supplier: "Ahmed Farms", product: "Tomatoes", quantity: 1200, unitPrice: 85, date: "2026-07-14", status: "confirmed" },
-  { id: "CN-1041", supplier: "Noor Agro", product: "Basmati Rice", quantity: 2400, unitPrice: 210, date: "2026-07-12", status: "confirmed" },
-  { id: "CN-1039", supplier: "Green Basket Growers", product: "Red Onions", quantity: 900, unitPrice: 60, date: "2026-07-10", status: "confirmed" },
-  { id: "CN-1044", supplier: "Bilal Supplies", product: "Green Chillies", quantity: 400, unitPrice: 145, date: "2026-07-19", status: "pending" },
-  { id: "CN-1045", supplier: "Ahmed Farms", product: "Potatoes", quantity: 1100, unitPrice: 46, date: "2026-07-20", status: "pending" },
-  { id: "CN-1033", supplier: "Noor Agro", product: "Wheat", quantity: 3000, unitPrice: 98, date: "2026-07-02", status: "confirmed" },
-];
+// Single place to fix field names if the real consignment response differs.
+function normalizeConsignment(raw) {
+  return {
+    id: raw.id,
+    supplyId: raw.supply_id,
+    itemName: raw.item_name ?? raw.supply?.item_name ?? null,
+    supplierId: raw.supplier_id ?? raw.supply?.supplier_id ?? null,
+    supplierName: raw.supplier?.name ?? raw.supplier_name ?? null,
+    unit: raw.unit ?? raw.supply?.unit ?? "kg",
+    quantity: raw.quantity_consigned,
+    sellingPrice: raw.selling_price_per_unit,
+    commissionRate: raw.commission_rate,
+    paymentTerm: raw.payment_term,
+    status: raw.status, // "pending" | "confirmed" | "completed" | "cancelled"
+    date: raw.created_at ?? raw.date ?? null,
+  };
+}
 
 function StatusBadge({ meta }) {
+  if (!meta) return null;
   return (
     <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        borderRadius: 999,
-        padding: "4px 10px",
-        fontSize: 12,
-        fontWeight: 500,
-        background: meta.bg,
-        color: meta.text,
-      }}
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+      style={{ background: meta.bg, color: meta.text }}
     >
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.dot }} />
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.dot }} />
       {meta.label}
     </span>
   );
 }
 
-function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
+function StatCard({ icon: Icon, label, value, iconBg, iconColor, isUr }) {
   return (
-    <div
-      style={{
-        borderRadius: 16,
-        border: `1px solid ${COLORS.border}`,
-        background: COLORS.card,
-        padding: 20,
-        boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
-      }}
-    >
-      <div
-        style={{
-          marginBottom: 16,
-          display: "flex",
-          height: 40,
-          width: 40,
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: "50%",
-          background: iconBg,
-        }}
-      >
+    <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full" style={{ background: iconBg }}>
         <Icon size={20} color={iconColor} strokeWidth={2} />
       </div>
-      <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 24, color: COLORS.heading }}>
+      <div className={`text-2xl ${isUr ? "font-urdu" : "font-display"}`} style={{ color: COLORS.ink }}>
         {value}
       </div>
-      <div style={{ marginTop: 4, fontSize: 14, color: COLORS.mutedText }}>{label}</div>
+      <div className="mt-1 text-sm" style={{ color: COLORS.muted }}>{label}</div>
     </div>
   );
 }
 
-const fieldLabelStyle = { display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500, color: COLORS.bodyText };
-const inputStyle = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: `1px solid ${COLORS.border}`,
-  borderRadius: 8,
-  padding: "10px 12px",
-  fontSize: 14,
-  color: "#33403a",
-  background: "#fff",
-  outline: "none",
-};
+const fieldLabelClass = "mb-1.5 block text-xs font-medium";
+const inputClass = "w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition-colors focus:ring-2";
 
 export default function AgentConsignmentIntake() {
   const { language, t } = useLanguage();
   const isUr = language === "ur";
-  const unit = isUr ? "کلوگرام" : "kg";
-  const trader = (name) => localizeTrader(name, language);
-  const product = (name) => localizeProduct(name, language);
+  const trader = (name) => (name ? localizeTrader(name, language) : "");
+  const headingClass = isUr ? "font-urdu" : "font-display";
 
   const STATUS_META = {
-    confirmed: { label: t("agent.common.status.confirmed"), dot: "#4c8b3c", text: "#4b6b3f", bg: "#dde8d0" },
-    pending: { label: t("agent.common.status.awaitingConfirmation"), dot: "#f0b84c", text: "#8a6413", bg: "#f5e6c5" },
-    rejected: { label: t("agent.common.status.rejected"), dot: "#b15a41", text: "#b15a41", bg: "#f4d9d0" },
+    confirmed: { label: t("agent.common.status.confirmed"), dot: COLORS.leaf, text: "#3f6b32", bg: "#e2ecd9" },
+    completed: { label: t("agent.common.status.completed"), dot: COLORS.forest, text: COLORS.forest, bg: COLORS.greige },
+    pending: { label: t("agent.common.status.awaitingConfirmation"), dot: COLORS.gold, text: "#8a6413", bg: "#f5e6c5" },
+    cancelled: { label: t("agent.common.status.cancelled"), dot: COLORS.errorText, text: COLORS.errorText, bg: COLORS.errorBg },
   };
 
-  const [intakes, setIntakes] = useState(MOCK_INTAKES);
+  // --- recent intakes list ---
+  const [intakes, setIntakes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [form, setForm] = useState({ supplier: SUPPLIERS[0], product: "", quantity: "", unitPrice: "" });
-  const [submitted, setSubmitted] = useState(false);
+  const [transitioningId, setTransitioningId] = useState(null);
+  const [actionError, setActionError] = useState(null);
+
+  async function fetchIntakes() {
+    setLoading(true);
+    setLoadError(null);
+    const { data, error } = await listMyConsignments();
+    if (error) {
+      setLoadError(error);
+      setIntakes([]);
+    } else {
+      setIntakes((data ?? []).map(normalizeConsignment));
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    fetchIntakes();
+  }, []);
 
   const filtered = useMemo(() => {
+    const q = query.toLowerCase();
     return intakes.filter((r) => {
-      const q = query.toLowerCase();
       const matchesQuery =
-        r.product.toLowerCase().includes(q) ||
-        product(r.product).includes(query) ||
-        r.supplier.toLowerCase().includes(q) ||
-        trader(r.supplier).includes(query) ||
-        r.id.toLowerCase().includes(q);
+        !q ||
+        (r.itemName ?? "").toLowerCase().includes(q) ||
+        trader(r.supplierName).toLowerCase().includes(q) ||
+        String(r.id).includes(q);
       const matchesStatus = statusFilter === "all" || r.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
   }, [intakes, query, statusFilter, language]);
 
   const totals = useMemo(() => {
-    const totalQty = intakes.reduce((s, r) => s + r.quantity, 0);
+    const now = new Date();
+    const thisMonthItems = intakes.filter((r) => {
+      if (!r.date) return false;
+      const d = new Date(r.date);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const totalQty = intakes.reduce((s, r) => s + (r.quantity ?? 0), 0);
     const pendingCount = intakes.filter((r) => r.status === "pending").length;
-    const activeSuppliers = new Set(intakes.map((r) => r.supplier)).size;
-    return { totalQty, pendingCount, activeSuppliers, thisMonth: intakes.length };
+    const activeSuppliers = new Set(intakes.map((r) => r.supplierId ?? r.supplierName).filter(Boolean)).size;
+    return { totalQty, pendingCount, activeSuppliers, thisMonth: thisMonthItems.length };
   }, [intakes]);
 
   const pendingItems = intakes.filter((r) => r.status === "pending").slice(0, 4);
+
+  async function handleTransition(consignmentId, status) {
+    setActionError(null);
+    setTransitioningId(consignmentId);
+    const { error } = await updateConsignmentStatus(consignmentId, status);
+    if (error) {
+      setActionError(error);
+    } else {
+      setIntakes((prev) => prev.map((r) => (r.id === consignmentId ? { ...r, status } : r)));
+    }
+    setTransitioningId(null);
+  }
+
+  // --- intake form ---
+  const [supplierIdInput, setSupplierIdInput] = useState("");
+  const [supplies, setSupplies] = useState([]);
+  const [suppliesLoading, setSuppliesLoading] = useState(false);
+  const [suppliesError, setSuppliesError] = useState(null);
+
+  const [form, setForm] = useState({
+    supplyId: "",
+    quantity: "",
+    sellingPrice: "",
+    commissionRate: "",
+    paymentTerm: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  async function handleFindSupplies(e) {
+    e.preventDefault();
+    if (!supplierIdInput) return;
+    setSuppliesLoading(true);
+    setSuppliesError(null);
+    setSupplies([]);
+    setForm((f) => ({ ...f, supplyId: "" }));
+    const { data, error } = await listAvailableSupplies(supplierIdInput);
+    if (error) {
+      setSuppliesError(error);
+    } else {
+      setSupplies(data ?? []);
+    }
+    setSuppliesLoading(false);
+  }
 
   function handleChange(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    if (!form.product || !form.quantity || !form.unitPrice) return;
+  const selectedSupply = supplies.find((s) => String(s.id) === String(form.supplyId));
 
-    const nextId = `CN-${1046 + intakes.filter((r) => r.id.startsWith("CN-")).length}`;
-    const newIntake = {
-      id: nextId,
-      supplier: form.supplier,
-      product: form.product,
-      quantity: Number(form.quantity),
-      unitPrice: Number(form.unitPrice),
-      date: new Date().toISOString().slice(0, 10),
-      status: "pending",
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setSubmitError(null);
+    if (!form.supplyId || !form.quantity || !form.sellingPrice || !form.paymentTerm) return;
+
+    setSubmitting(true);
+    const payload = {
+      supply_id: Number(form.supplyId),
+      quantity_consigned: Number(form.quantity),
+      selling_price_per_unit: Number(form.sellingPrice),
+      payment_term: form.paymentTerm,
+      ...(form.commissionRate ? { commission_rate: Number(form.commissionRate) } : {}),
     };
-    setIntakes((prev) => [newIntake, ...prev]);
-    setForm({ supplier: SUPPLIERS[0], product: "", quantity: "", unitPrice: "" });
+    const { data, error } = await createConsignment(payload);
+    setSubmitting(false);
+
+    if (error) {
+      setSubmitError(error);
+      return;
+    }
+    if (data) {
+      setIntakes((prev) => [normalizeConsignment(data), ...prev]);
+    } else {
+      fetchIntakes();
+    }
+    setForm({ supplyId: "", quantity: "", sellingPrice: "", commissionRate: "", paymentTerm: "" });
+    setSupplies([]);
+    setSupplierIdInput("");
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 2500);
   }
 
-  const thStyle = { padding: "12px 20px", fontWeight: 500, fontSize: 13, color: COLORS.mutedText, textAlign: "left" };
-  const tdStyle = { padding: "16px 20px", fontSize: 14, color: "#33403a" };
-
   return (
-    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "system-ui, -apple-system, sans-serif" }} dir={isUr ? "rtl" : "ltr"}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div dir={isUr ? "rtl" : "ltr"} className="min-h-screen p-6 font-body" style={{ backgroundColor: COLORS.cream }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        .font-display { font-family: 'Fraunces', serif; }
+        .font-body { font-family: 'Inter', sans-serif; }
+        .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; }
+      `}</style>
+
+      <div className="flex flex-col gap-6">
         {/* Page header */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1
-              style={{
-                fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, 'Times New Roman', serif",
-                fontSize: 30,
-                color: COLORS.heading,
-                margin: 0,
-              }}
-            >
+            <h1 className={`text-3xl ${headingClass}`} style={{ color: COLORS.ink }}>
               {t("agent.consignmentIntake.title")}
             </h1>
-            <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
+            <p className="mt-1.5 text-sm" style={{ color: COLORS.muted }}>
               {t("agent.consignmentIntake.subtitle")}
             </p>
           </div>
-          <LanguageSelector />
         </div>
+
+        {loadError && (
+          <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: COLORS.errorBg, color: COLORS.errorText }}>
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} />
+              {(t("agent.consignmentIntake.loadError") || "Couldn't load intakes")}: {loadError}
+            </div>
+            <button onClick={fetchIntakes} className="rounded-lg border px-3 py-1 text-xs font-medium" style={{ borderColor: COLORS.errorText }}>
+              {t("agent.commissions.retry") || "Retry"}
+            </button>
+          </div>
+        )}
+        {actionError && (
+          <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: COLORS.errorBg, color: COLORS.errorText }}>
+            <AlertCircle size={16} />
+            {actionError}
+          </div>
+        )}
 
         {/* Stat cards */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 20,
-          }}
-        >
-          <StatCard icon={Truck} label={t("agent.consignmentIntake.stats.receivedThisMonth")} value={totals.thisMonth} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={PackagePlus} label={t("agent.consignmentIntake.stats.totalQuantityIntake")} value={`${totals.totalQty.toLocaleString()} ${unit}`} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={ClipboardCheck} label={t("agent.consignmentIntake.stats.awaitingConfirmation")} value={totals.pendingCount} iconBg="#f6ddab" iconColor="#c9922c" />
-          <StatCard icon={Users} label={t("agent.consignmentIntake.stats.activeSuppliers")} value={totals.activeSuppliers} iconBg="#e8cdc2" iconColor="#b15a41" />
+        <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+          <StatCard isUr={isUr} icon={Truck} label={t("agent.consignmentIntake.stats.receivedThisMonth")} value={totals.thisMonth} iconBg="#e2ecd9" iconColor={COLORS.leaf} />
+          <StatCard isUr={isUr} icon={PackagePlus} label={t("agent.consignmentIntake.stats.totalQuantityIntake")} value={totals.totalQty.toLocaleString()} iconBg="#e2ecd9" iconColor={COLORS.leaf} />
+          <StatCard isUr={isUr} icon={ClipboardCheck} label={t("agent.consignmentIntake.stats.awaitingConfirmation")} value={totals.pendingCount} iconBg="#f5e6c5" iconColor={COLORS.goldDark} />
+          <StatCard isUr={isUr} icon={Users} label={t("agent.consignmentIntake.stats.activeSuppliers")} value={totals.activeSuppliers} iconBg={COLORS.errorBg} iconColor={COLORS.errorText} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
+        <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 340px" }}>
           {/* Left column: intake form + recent intakes table */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div className="flex flex-col gap-6">
             {/* Intake form */}
-            <div
-              style={{
-                borderRadius: 16,
-                border: `1px solid ${COLORS.border}`,
-                background: COLORS.card,
-                boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
-                padding: 24,
-              }}
-            >
-              <h2 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0, marginBottom: 20 }}>
+            <div className="rounded-2xl border bg-white p-6" style={{ borderColor: COLORS.border }}>
+              <h2 className={`mb-5 text-lg ${headingClass}`} style={{ color: COLORS.ink }}>
                 {t("agent.consignmentIntake.recordNewIntake")}
               </h2>
-              <form onSubmit={handleSubmit}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                    gap: 16,
-                    marginBottom: 20,
-                  }}
+
+              {/* Step 1: supplier + supply lookup — see file header note on the
+                  missing supplier-directory endpoint */}
+              <div className="mb-5 flex flex-wrap items-end gap-3 rounded-lg p-3" style={{ backgroundColor: COLORS.greige }}>
+                <div className="min-w-[160px] flex-1">
+                  <label className={fieldLabelClass} style={{ color: COLORS.label }}>
+                    {t("agent.consignmentIntake.form.supplierId") || "Supplier ID"}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={supplierIdInput}
+                    onChange={(e) => setSupplierIdInput(e.target.value)}
+                    placeholder={t("agent.consignmentIntake.form.supplierIdPlaceholder") || "e.g. 14"}
+                    className={inputClass}
+                    style={{ borderColor: COLORS.border, color: COLORS.ink, background: "#fff" }}
+                  />
+                </div>
+                <button
+                  onClick={handleFindSupplies}
+                  disabled={!supplierIdInput || suppliesLoading}
+                  className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-transform active:scale-[0.99] disabled:opacity-50"
+                  style={{ backgroundColor: COLORS.forest, color: "#fff" }}
                 >
+                  {suppliesLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                  {t("agent.consignmentIntake.form.findSupplies") || "Find supplies"}
+                </button>
+              </div>
+              {suppliesError && (
+                <p className="mb-4 text-xs" style={{ color: COLORS.errorText }}>{suppliesError}</p>
+              )}
+
+              <form onSubmit={handleSubmit}>
+                <div className="mb-5 grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
                   <div>
-                    <label style={fieldLabelStyle}>{t("agent.consignmentIntake.form.supplier")}</label>
+                    <label className={fieldLabelClass} style={{ color: COLORS.label }}>
+                      {t("agent.consignmentIntake.form.supply") || "Supply"}
+                    </label>
                     <select
-                      value={form.supplier}
-                      onChange={(e) => handleChange("supplier", e.target.value)}
-                      style={{ ...inputStyle, appearance: "none" }}
+                      value={form.supplyId}
+                      onChange={(e) => handleChange("supplyId", e.target.value)}
+                      disabled={supplies.length === 0}
+                      className={`${inputClass} appearance-none disabled:opacity-50`}
+                      style={{ borderColor: COLORS.border, color: COLORS.ink, background: "#fff" }}
                     >
-                      {SUPPLIERS.map((s) => (
-                        <option key={s} value={s}>{trader(s)}</option>
+                      <option value="">
+                        {supplies.length === 0
+                          ? (t("agent.consignmentIntake.form.noSuppliesYet") || "Look up a supplier first")
+                          : (t("agent.consignmentIntake.form.selectSupply") || "Select a supply")}
+                      </option>
+                      {supplies.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.item_name} — {s.current_stock} {s.unit} @ {t("buyer.common.currency")} {s.cost_per_unit}
+                        </option>
                       ))}
                     </select>
+                    {selectedSupply && (
+                      <p className="mt-1.5 text-xs" style={{ color: COLORS.muted }}>
+                        {t("agent.consignmentIntake.form.stockAvailable") || "In stock"}: {selectedSupply.current_stock} {selectedSupply.unit}
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <label style={fieldLabelStyle}>{t("agent.consignmentIntake.form.product")}</label>
-                    <input
-                      value={form.product}
-                      onChange={(e) => handleChange("product", e.target.value)}
-                      placeholder={t("agent.consignmentIntake.form.productPlaceholder")}
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div>
-                    <label style={fieldLabelStyle}>{t("agent.consignmentIntake.form.quantityKg")}</label>
+                    <label className={fieldLabelClass} style={{ color: COLORS.label }}>
+                      {t("agent.consignmentIntake.form.quantityKg")}
+                    </label>
                     <input
                       type="number"
                       min="0"
+                      max={selectedSupply?.current_stock}
                       value={form.quantity}
                       onChange={(e) => handleChange("quantity", e.target.value)}
                       placeholder="0"
-                      style={inputStyle}
+                      className={inputClass}
+                      style={{ borderColor: COLORS.border, color: COLORS.ink, background: "#fff" }}
                     />
                   </div>
                   <div>
-                    <label style={fieldLabelStyle}>{t("agent.consignmentIntake.form.unitPriceRs")}</label>
+                    <label className={fieldLabelClass} style={{ color: COLORS.label }}>
+                      {t("agent.consignmentIntake.form.sellingPricePerUnit") || "Selling price / unit (Rs)"}
+                    </label>
                     <input
                       type="number"
                       min="0"
-                      value={form.unitPrice}
-                      onChange={(e) => handleChange("unitPrice", e.target.value)}
+                      value={form.sellingPrice}
+                      onChange={(e) => handleChange("sellingPrice", e.target.value)}
                       placeholder="0"
-                      style={inputStyle}
+                      className={inputClass}
+                      style={{ borderColor: COLORS.border, color: COLORS.ink, background: "#fff" }}
+                    />
+                  </div>
+                  <div>
+                    <label className={fieldLabelClass} style={{ color: COLORS.label }}>
+                      {t("agent.consignmentIntake.form.commissionRate") || "Commission rate % (optional)"}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.commissionRate}
+                      onChange={(e) => handleChange("commissionRate", e.target.value)}
+                      placeholder={t("agent.consignmentIntake.form.commissionRatePlaceholder") || "Platform default"}
+                      className={inputClass}
+                      style={{ borderColor: COLORS.border, color: COLORS.ink, background: "#fff" }}
+                    />
+                  </div>
+                  <div>
+                    {/* payment_term's valid values aren't documented anywhere
+                        in the handler files — free text until confirmed */}
+                    <label className={fieldLabelClass} style={{ color: COLORS.label }}>
+                      {t("agent.consignmentIntake.form.paymentTerm") || "Payment term"}
+                    </label>
+                    <input
+                      value={form.paymentTerm}
+                      onChange={(e) => handleChange("paymentTerm", e.target.value)}
+                      placeholder={t("agent.consignmentIntake.form.paymentTermPlaceholder") || "e.g. net_30"}
+                      className={inputClass}
+                      style={{ borderColor: COLORS.border, color: COLORS.ink, background: "#fff" }}
                     />
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+
+                {submitError && (
+                  <div className="mb-4 rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: COLORS.errorBg, color: COLORS.errorText }}>
+                    {submitError}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3.5">
                   <button
                     type="submit"
-                    style={{
-                      borderRadius: 8,
-                      border: "none",
-                      background: COLORS.gold,
-                      padding: "10px 24px",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: COLORS.heading,
-                      cursor: "pointer",
-                    }}
-                    onMouseOver={(e) => (e.currentTarget.style.background = COLORS.goldHover)}
-                    onMouseOut={(e) => (e.currentTarget.style.background = COLORS.gold)}
+                    disabled={submitting}
+                    className="flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-transform active:scale-[0.99] disabled:opacity-70"
+                    style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
                   >
+                    {submitting && <Loader2 size={14} className="animate-spin" />}
                     {t("agent.consignmentIntake.recordIntake")}
                   </button>
                   {submitted && (
-                    <span style={{ fontSize: 13, color: COLORS.sage, fontWeight: 500 }}>
+                    <span className="text-xs font-medium" style={{ color: COLORS.leaf }}>
                       {t("agent.consignmentIntake.submittedMsg")}
                     </span>
                   )}
@@ -317,188 +469,151 @@ export default function AgentConsignmentIntake() {
             </div>
 
             {/* Recent intakes table */}
-            <div
-              style={{
-                borderRadius: 16,
-                border: `1px solid ${COLORS.border}`,
-                background: COLORS.card,
-                boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  borderBottom: `1px solid ${COLORS.border}`,
-                  padding: 20,
-                  flexWrap: "wrap",
-                }}
-              >
-                <h2 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+            <div className="overflow-hidden rounded-2xl border bg-white" style={{ borderColor: COLORS.border }}>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5" style={{ borderColor: COLORS.border }}>
+                <h2 className={`text-lg ${headingClass}`} style={{ color: COLORS.ink }}>
                   {t("agent.consignmentIntake.recentIntakes")}
                 </h2>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: 8,
-                      padding: "8px 12px",
-                    }}
-                  >
-                    <Search size={16} color={COLORS.mutedText} />
+                <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: COLORS.border }}>
+                    <Search size={16} color={COLORS.iconMuted} />
                     <input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder={t("agent.common.searchProductSupplier")}
-                      style={{
-                        border: "none",
-                        outline: "none",
-                        background: "transparent",
-                        fontSize: 14,
-                        width: 180,
-                        color: "#33403a",
-                      }}
+                      className="w-44 border-none bg-transparent text-sm outline-none"
+                      style={{ color: COLORS.ink }}
                     />
                   </div>
-                  <div style={{ position: "relative" }}>
+                  <div className="relative">
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
-                      style={{
-                        appearance: "none",
-                        border: `1px solid ${COLORS.border}`,
-                        borderRadius: 8,
-                        padding: "8px 32px 8px 12px",
-                        fontSize: 14,
-                        color: "#33403a",
-                        background: "#fff",
-                      }}
+                      className="appearance-none rounded-lg border bg-white py-2 pl-3 pr-8 text-sm"
+                      style={{ borderColor: COLORS.border, color: COLORS.ink }}
                     >
                       <option value="all">{t("agent.common.allStatuses")}</option>
                       <option value="confirmed">{t("agent.common.status.confirmed")}</option>
+                      <option value="completed">{t("agent.common.status.completed")}</option>
                       <option value="pending">{t("agent.common.status.awaitingConfirmation")}</option>
-                      <option value="rejected">{t("agent.common.status.rejected")}</option>
+                      <option value="cancelled">{t("agent.common.status.cancelled")}</option>
                     </select>
-                    <ChevronDown
-                      size={16}
-                      color={COLORS.mutedText}
-                      style={{ position: "absolute", right: 10, top: 10, pointerEvents: "none" }}
-                    />
+                    <ChevronDown size={16} color={COLORS.iconMuted} className="pointer-events-none absolute right-2.5 top-2.5" />
                   </div>
                 </div>
               </div>
 
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>{t("agent.common.table.consignment")}</th>
-                      <th style={thStyle}>{t("agent.common.table.supplier")}</th>
-                      <th style={thStyle}>{t("agent.common.table.product")}</th>
-                      <th style={thStyle}>{t("agent.common.table.quantity")}</th>
-                      <th style={thStyle}>{t("agent.common.table.unitPrice")}</th>
-                      <th style={thStyle}>{t("agent.common.table.date")}</th>
-                      <th style={thStyle}>{t("agent.common.table.status")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((r) => (
-                      <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                        <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>{r.id}</td>
-                        <td style={tdStyle}>{trader(r.supplier)}</td>
-                        <td style={tdStyle}>{product(r.product)}</td>
-                        <td style={tdStyle}>{r.quantity.toLocaleString()} {unit}</td>
-                        <td style={tdStyle}>{t("buyer.common.currency")} {r.unitPrice}</td>
-                        <td style={{ ...tdStyle, color: COLORS.mutedText }}>{formatAgentDate(r.date, language)}</td>
-                        <td style={tdStyle}>
-                          <StatusBadge meta={STATUS_META[r.status]} />
-                        </td>
-                      </tr>
-                    ))}
-                    {filtered.length === 0 && (
+              {loading ? (
+                <div className="flex items-center justify-center gap-2 py-14 text-sm" style={{ color: COLORS.muted }}>
+                  <Loader2 size={18} className="animate-spin" />
+                  {t("agent.consignmentIntake.loading") || "Loading intakes…"}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
                       <tr>
-                        <td colSpan={7} style={{ padding: "40px 20px", textAlign: "center", color: COLORS.mutedText }}>
-                          {t("agent.consignmentIntake.noResults")}
-                        </td>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.consignment")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.supplier")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.product")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.quantity")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.unitPrice")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.date")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.status")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }} />
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {filtered.map((r) => (
+                        <tr key={r.id} className="border-t" style={{ borderColor: COLORS.border }}>
+                          <td className="px-5 py-4 text-sm font-semibold" style={{ color: COLORS.ink }}>#{r.id}</td>
+                          <td className="px-5 py-4 text-sm">{r.supplierName ? trader(r.supplierName) : (r.supplierId ? `#${r.supplierId}` : "—")}</td>
+                          <td className="px-5 py-4 text-sm">{r.itemName ?? "—"}</td>
+                          <td className="px-5 py-4 text-sm">{(r.quantity ?? 0).toLocaleString()} {r.unit}</td>
+                          <td className="px-5 py-4 text-sm">{t("buyer.common.currency")} {r.sellingPrice}</td>
+                          <td className="px-5 py-4 text-sm" style={{ color: COLORS.muted }}>{r.date ? formatAgentDate(r.date, language) : "—"}</td>
+                          <td className="px-5 py-4 text-sm">
+                            <StatusBadge meta={STATUS_META[r.status]} />
+                          </td>
+                          <td className="px-5 py-4 text-sm">
+                            {r.status === "pending" && (
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => handleTransition(r.id, "confirmed")}
+                                  disabled={transitioningId === r.id}
+                                  className="inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium disabled:opacity-50"
+                                  style={{ borderColor: COLORS.leaf, color: COLORS.leaf }}
+                                >
+                                  {transitioningId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                  {t("agent.common.confirm") || "Confirm"}
+                                </button>
+                                <button
+                                  onClick={() => handleTransition(r.id, "cancelled")}
+                                  disabled={transitioningId === r.id}
+                                  className="inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium disabled:opacity-50"
+                                  style={{ borderColor: COLORS.errorText, color: COLORS.errorText }}
+                                >
+                                  <X size={12} />
+                                  {t("agent.common.cancel") || "Cancel"}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {filtered.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-5 py-10 text-center text-sm" style={{ color: COLORS.muted }}>
+                            {t("agent.consignmentIntake.noResults")}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Side column */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div className="flex flex-col gap-6">
             {/* Awaiting confirmation — dark forest panel */}
-            <div style={{ borderRadius: 16, background: COLORS.forest, padding: 24, color: "#fff" }}>
-              <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="rounded-2xl p-6 text-white" style={{ backgroundColor: COLORS.forest }}>
+              <div className="mb-4 flex items-center gap-2">
                 <ClipboardCheck size={20} color={COLORS.gold} />
-                <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, margin: 0 }}>{t("agent.consignmentIntake.awaitingConfirmation")}</h3>
+                <h3 className={`text-lg ${headingClass}`}>{t("agent.consignmentIntake.awaitingConfirmation")}</h3>
               </div>
               {pendingItems.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div className="flex flex-col gap-3">
                   {pendingItems.map((r) => (
-                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{product(r.product)} · {trader(r.supplier)}</span>
-                      <span style={{ fontWeight: 600 }}>{r.quantity.toLocaleString()} {unit}</span>
+                    <div key={r.id} className="flex justify-between text-sm">
+                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{r.itemName ?? `#${r.id}`} · {trader(r.supplierName)}</span>
+                      <span className="font-semibold">{(r.quantity ?? 0).toLocaleString()} {r.unit}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>{t("agent.consignmentIntake.nothingAwaiting")}</p>
+                <p className="text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>{t("agent.consignmentIntake.nothingAwaiting")}</p>
               )}
-              <button
-                style={{
-                  marginTop: 20,
-                  width: "100%",
-                  borderRadius: 8,
-                  border: "none",
-                  background: COLORS.gold,
-                  padding: "10px 0",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: COLORS.heading,
-                  cursor: "pointer",
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.background = COLORS.goldHover)}
-                onMouseOut={(e) => (e.currentTarget.style.background = COLORS.gold)}
-              >
-                {t("agent.consignmentIntake.reviewAll")}
-              </button>
             </div>
 
             {/* This month summary */}
-            <div
-              style={{
-                borderRadius: 16,
-                border: `1px solid ${COLORS.border}`,
-                background: COLORS.card,
-                padding: 24,
-                boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
-              }}
-            >
-              <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
+            <div className="rounded-2xl border bg-white p-6" style={{ borderColor: COLORS.border }}>
+              <h3 className={`text-lg ${headingClass}`} style={{ color: COLORS.ink }}>
                 {t("agent.common.thisMonth")}
               </h3>
-              <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12, fontSize: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>{t("agent.consignmentIntake.thisMonth.consignmentsReceived")}</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.thisMonth}</span>
+              <div className="mt-4 flex flex-col gap-3 text-sm">
+                <div className="flex justify-between">
+                  <span style={{ color: COLORS.muted }}>{t("agent.consignmentIntake.thisMonth.consignmentsReceived")}</span>
+                  <span className="font-semibold" style={{ color: COLORS.ink }}>{totals.thisMonth}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>{t("agent.consignmentIntake.thisMonth.totalQuantity")}</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.totalQty.toLocaleString()} {unit}</span>
+                <div className="flex justify-between">
+                  <span style={{ color: COLORS.muted }}>{t("agent.consignmentIntake.thisMonth.totalQuantity")}</span>
+                  <span className="font-semibold" style={{ color: COLORS.ink }}>{totals.totalQty.toLocaleString()}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>{t("agent.consignmentIntake.thisMonth.activeSuppliers")}</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.activeSuppliers}</span>
+                <div className="flex justify-between">
+                  <span style={{ color: COLORS.muted }}>{t("agent.consignmentIntake.thisMonth.activeSuppliers")}</span>
+                  <span className="font-semibold" style={{ color: COLORS.ink }}>{totals.activeSuppliers}</span>
                 </div>
               </div>
             </div>

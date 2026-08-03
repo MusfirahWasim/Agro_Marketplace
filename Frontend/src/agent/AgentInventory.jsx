@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Search,
   Boxes,
@@ -7,101 +7,86 @@ import {
   AlertTriangle,
   ChevronDown,
   Leaf,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../i18n/LanguageContext";
-import LanguageSelector from "../i18n/LanguageSelector";
-import { localizeTrader, localizeProduct } from "./agentLocale";
+import { localizeTrader, formatAgentDate } from "./agentLocale";
+import { listMyConsignments } from "../handlers/consignment";
+import { listOrdersAgainstMyConsignments } from "../handlers/order";
 
 /**
  * AgentInventory.jsx
- * Commission Agent — consigned inventory (qty received / sold / remaining per consignment).
- * Fully localized via LanguageContext (English / Urdu), including product
- * and supplier names.
+ * Commission Agent — consigned inventory (received / sold / remaining per
+ * consignment), with two SEPARATE badges: lifecycle status (from the
+ * consignment record) and stock level (computed here, not stored anywhere).
  *
- * Data below is illustrative — swap MOCK_INVENTORY for a call to lib/api.js
- * (e.g. getAgentInventory()) once the endpoint is wired up.
+ * "Sold" isn't a field on the consignment — it's derived by summing
+ * quantity_ordered from listOrdersAgainstMyConsignments() per consigned_id,
+ * excluding cancelled orders. Stock-level badge (in-stock/low-stock/
+ * sold-out) is only meaningful once a consignment is confirmed/completed —
+ * a pending consignment hasn't actually received stock yet, so it shows "—".
+ *
+ * One of the 5 files flagged for a full restyle — converted from inline
+ * styles/Georgia to the LoginPage token system (same COLORS + font-display/
+ * font-body/font-urdu convention used in the other agent files so far).
  */
 
 const COLORS = {
-  pageBg: "#faf8f2",
-  card: "#ffffff",
-  border: "#ece8de",
   forest: "#1e4620",
-  sage: "#4c8b3c",
+  forestDark: "#122b15",
+  leaf: "#4d8b3d",
   gold: "#f0b84c",
-  goldHover: "#e5aa38",
-  heading: "#16211a",
-  bodyText: "#5b6660",
-  mutedText: "#8b948d",
+  goldDark: "#d99e2f",
+  cream: "#faf8f2",
+  greige: "#eef0e9",
+  ink: "#17231a",
+  border: "#d9ddce",
+  muted: "#6b7568",
+  iconMuted: "#909685",
+  errorBg: "#faeaea",
+  errorText: "#b5544a",
 };
 
-const MOCK_INVENTORY = [
-  { id: "CN-1042", product: "Tomatoes", supplier: "Ahmed Farms", received: 1200, sold: 980 },
-  { id: "CN-1041", product: "Basmati Rice", supplier: "Noor Agro", received: 2400, sold: 1150 },
-  { id: "CN-1039", product: "Red Onions", supplier: "Green Basket Growers", received: 900, sold: 900 },
-  { id: "CN-1037", product: "Potatoes", supplier: "Ahmed Farms", received: 1500, sold: 640 },
-  { id: "CN-1036", product: "Green Chillies", supplier: "Bilal Supplies", received: 320, sold: 90 },
-  { id: "CN-1033", product: "Wheat", supplier: "Noor Agro", received: 3000, sold: 3000 },
-  { id: "CN-1030", product: "Mangoes (Sindhri)", supplier: "Green Basket Growers", received: 760, sold: 210 },
-];
+function normalizeConsignment(raw) {
+  return {
+    id: raw.id,
+    itemName: raw.item_name ?? raw.supply?.item_name ?? null,
+    supplierName: raw.supplier?.name ?? raw.supplier_name ?? null,
+    supplierId: raw.supplier_id ?? raw.supply?.supplier_id ?? null,
+    unit: raw.unit ?? raw.supply?.unit ?? "kg",
+    received: raw.quantity_consigned ?? 0,
+    status: raw.status, // "pending" | "confirmed" | "completed" | "cancelled"
+    date: raw.created_at ?? null,
+  };
+}
 
-function statusFor(received, sold) {
+function stockStatusFor(received, sold) {
   const remaining = received - sold;
   if (remaining <= 0) return "sold-out";
-  if (remaining / received <= 0.15) return "low-stock";
+  if (received > 0 && remaining / received <= 0.15) return "low-stock";
   return "in-stock";
 }
 
 function StatusBadge({ meta }) {
+  if (!meta) return <span style={{ color: COLORS.muted }}>—</span>;
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        borderRadius: 999,
-        padding: "4px 10px",
-        fontSize: 12,
-        fontWeight: 500,
-        background: meta.bg,
-        color: meta.text,
-      }}
-    >
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.dot }} />
+    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: meta.bg, color: meta.text }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.dot }} />
       {meta.label}
     </span>
   );
 }
 
-function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
+function StatCard({ icon: Icon, label, value, iconBg, iconColor, isUr }) {
   return (
-    <div
-      style={{
-        borderRadius: 16,
-        border: `1px solid ${COLORS.border}`,
-        background: COLORS.card,
-        padding: 20,
-        boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
-      }}
-    >
-      <div
-        style={{
-          marginBottom: 16,
-          display: "flex",
-          height: 40,
-          width: 40,
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: "50%",
-          background: iconBg,
-        }}
-      >
+    <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full" style={{ background: iconBg }}>
         <Icon size={20} color={iconColor} strokeWidth={2} />
       </div>
-      <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 24, color: COLORS.heading }}>
-        {value}
-      </div>
-      <div style={{ marginTop: 4, fontSize: 14, color: COLORS.mutedText }}>{label}</div>
+      <div className={`text-2xl ${isUr ? "font-urdu" : "font-display"}`} style={{ color: COLORS.ink }}>{value}</div>
+      <div className="mt-1 text-sm" style={{ color: COLORS.muted }}>{label}</div>
     </div>
   );
 }
@@ -109,282 +94,279 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
 export default function AgentInventory() {
   const { language, t } = useLanguage();
   const isUr = language === "ur";
-  const unit = isUr ? "کلوگرام" : "kg";
-  const trader = (name) => localizeTrader(name, language);
-  const product = (name) => localizeProduct(name, language);
+  const trader = (name) => (name ? localizeTrader(name, language) : "");
+  const headingClass = isUr ? "font-urdu" : "font-display";
+  const navigate = useNavigate();
+
+  const [consignments, setConsignments] = useState([]);
+  const [soldByConsignment, setSoldByConsignment] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const STATUS_META = {
-    "in-stock": { label: t("agent.common.status.inStock"), dot: "#4c8b3c", text: "#4b6b3f", bg: "#dde8d0" },
-    "low-stock": { label: t("agent.common.status.lowStock"), dot: "#f0b84c", text: "#8a6413", bg: "#f5e6c5" },
-    "sold-out": { label: t("agent.common.status.soldOut"), dot: "#b15a41", text: "#b15a41", bg: "#f4d9d0" },
+  const LIFECYCLE_META = {
+    confirmed: { label: t("agent.common.status.confirmed"), dot: COLORS.leaf, text: "#3f6b32", bg: "#e2ecd9" },
+    completed: { label: t("agent.common.status.completed"), dot: COLORS.forest, text: COLORS.forest, bg: COLORS.greige },
+    pending: { label: t("agent.common.status.awaitingConfirmation"), dot: COLORS.gold, text: "#8a6413", bg: "#f5e6c5" },
+    cancelled: { label: t("agent.common.status.cancelled"), dot: COLORS.errorText, text: COLORS.errorText, bg: COLORS.errorBg },
   };
+  const STOCK_META = {
+    "in-stock": { label: t("agent.common.status.inStock"), dot: COLORS.leaf, text: "#3f6b32", bg: "#e2ecd9" },
+    "low-stock": { label: t("agent.common.status.lowStock"), dot: COLORS.gold, text: "#8a6413", bg: "#f5e6c5" },
+    "sold-out": { label: t("agent.common.status.soldOut"), dot: COLORS.errorText, text: COLORS.errorText, bg: COLORS.errorBg },
+  };
+
+  async function fetchInventory() {
+    setLoading(true);
+    setLoadError(null);
+    const [consignmentsRes, ordersRes] = await Promise.all([
+      listMyConsignments(),
+      listOrdersAgainstMyConsignments(),
+    ]);
+    const firstError = consignmentsRes.error || ordersRes.error;
+    if (firstError) {
+      setLoadError(firstError);
+      setConsignments([]);
+      setSoldByConsignment({});
+      setLoading(false);
+      return;
+    }
+
+    setConsignments((consignmentsRes.data ?? []).map(normalizeConsignment));
+
+    const sold = {};
+    (ordersRes.data ?? []).forEach((o) => {
+      if (o.status === "cancelled") return;
+      const key = o.consigned_id;
+      sold[key] = (sold[key] ?? 0) + (o.quantity_ordered ?? 0);
+    });
+    setSoldByConsignment(sold);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    fetchInventory();
+  }, []);
 
   const rows = useMemo(
     () =>
-      MOCK_INVENTORY.map((r) => ({
-        ...r,
-        remaining: r.received - r.sold,
-        status: statusFor(r.received, r.sold),
-      })),
-    []
+      consignments.map((c) => {
+        const sold = soldByConsignment[c.id] ?? 0;
+        const remaining = c.received - sold;
+        const isStockTracked = c.status === "confirmed" || c.status === "completed";
+        return {
+          ...c,
+          sold,
+          remaining,
+          stockStatus: isStockTracked ? stockStatusFor(c.received, sold) : null,
+        };
+      }),
+    [consignments, soldByConsignment]
   );
 
   const filtered = useMemo(() => {
+    const q = query.toLowerCase();
     return rows.filter((r) => {
-      const q = query.toLowerCase();
       const matchesQuery =
-        r.product.toLowerCase().includes(q) ||
-        product(r.product).includes(query) ||
-        r.supplier.toLowerCase().includes(q) ||
-        trader(r.supplier).includes(query) ||
-        r.id.toLowerCase().includes(q);
+        !q ||
+        (r.itemName ?? "").toLowerCase().includes(q) ||
+        trader(r.supplierName).toLowerCase().includes(q) ||
+        String(r.id).includes(q);
       const matchesStatus = statusFilter === "all" || r.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
   }, [rows, query, statusFilter, language]);
 
   const totals = useMemo(() => {
-    const received = rows.reduce((s, r) => s + r.received, 0);
-    const sold = rows.reduce((s, r) => s + r.sold, 0);
-    const lowStockCount = rows.filter((r) => r.status === "low-stock" || r.status === "sold-out").length;
+    const active = rows.filter((r) => r.status === "confirmed" || r.status === "completed");
+    const received = active.reduce((s, r) => s + r.received, 0);
+    const sold = active.reduce((s, r) => s + r.sold, 0);
+    const lowStockCount = active.filter((r) => r.stockStatus === "low-stock" || r.stockStatus === "sold-out").length;
     return { received, sold, remaining: received - sold, lowStockCount };
   }, [rows]);
 
-  const lowStockItems = rows.filter((r) => r.status === "low-stock").slice(0, 4);
-
-  const thStyle = { padding: "12px 20px", fontWeight: 500, fontSize: 13, color: COLORS.mutedText, textAlign: "left" };
-  const tdStyle = { padding: "16px 20px", fontSize: 14, color: "#33403a" };
+  const lowStockItems = rows.filter((r) => r.stockStatus === "low-stock").slice(0, 4);
 
   return (
-    <div style={{ background: COLORS.pageBg, padding: 24, fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "system-ui, -apple-system, sans-serif" }} dir={isUr ? "rtl" : "ltr"}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div dir={isUr ? "rtl" : "ltr"} className="min-h-screen p-6 font-body" style={{ backgroundColor: COLORS.cream }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        .font-display { font-family: 'Fraunces', serif; }
+        .font-body { font-family: 'Inter', sans-serif; }
+        .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; }
+      `}</style>
+
+      <div className="flex flex-col gap-6">
         {/* Page header */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1
-              style={{
-                fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, 'Times New Roman', serif",
-                fontSize: 30,
-                color: COLORS.heading,
-                margin: 0,
-              }}
-            >
-              {t("agent.inventory.title")}
-            </h1>
-            <p style={{ marginTop: 6, color: COLORS.bodyText, fontSize: 14 }}>
-              {t("agent.inventory.subtitle")}
-            </p>
+            <h1 className={`text-3xl ${headingClass}`} style={{ color: COLORS.ink }}>{t("agent.inventory.title")}</h1>
+            <p className="mt-1.5 text-sm" style={{ color: COLORS.muted }}>{t("agent.inventory.subtitle")}</p>
           </div>
-          <LanguageSelector />
         </div>
 
-        {/* Stat cards */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 20,
-          }}
-        >
-          <StatCard icon={Boxes} label={t("agent.inventory.stats.totalReceived")} value={`${totals.received.toLocaleString()} ${unit}`} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={PackageCheck} label={t("agent.inventory.stats.quantitySold")} value={`${totals.sold.toLocaleString()} ${unit}`} iconBg="#f6ddab" iconColor="#c9922c" />
-          <StatCard icon={Leaf} label={t("agent.inventory.stats.remainingOnHand")} value={`${totals.remaining.toLocaleString()} ${unit}`} iconBg="#dde8d0" iconColor={COLORS.sage} />
-          <StatCard icon={TrendingDown} label={t("agent.inventory.stats.lowStockCount")} value={totals.lowStockCount} iconBg="#e8cdc2" iconColor="#b15a41" />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
-          {/* Inventory table */}
-          <div
-            style={{
-              borderRadius: 16,
-              border: `1px solid ${COLORS.border}`,
-              background: COLORS.card,
-              boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                borderBottom: `1px solid ${COLORS.border}`,
-                padding: 20,
-                flexWrap: "wrap",
-              }}
-            >
-              <h2 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                {t("agent.inventory.consignmentsOnHand")}
-              </h2>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    border: `1px solid ${COLORS.border}`,
-                    borderRadius: 8,
-                    padding: "8px 12px",
-                  }}
-                >
-                  <Search size={16} color={COLORS.mutedText} />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={t("agent.common.searchProductSupplier")}
-                    style={{
-                      border: "none",
-                      outline: "none",
-                      background: "transparent",
-                      fontSize: 14,
-                      width: 180,
-                      color: "#33403a",
-                    }}
-                  />
-                </div>
-                <div style={{ position: "relative" }}>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    style={{
-                      appearance: "none",
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: 8,
-                      padding: "8px 32px 8px 12px",
-                      fontSize: 14,
-                      color: "#33403a",
-                      background: "#fff",
-                    }}
-                  >
-                    <option value="all">{t("agent.common.allStatuses")}</option>
-                    <option value="in-stock">{t("agent.common.status.inStock")}</option>
-                    <option value="low-stock">{t("agent.common.status.lowStock")}</option>
-                    <option value="sold-out">{t("agent.common.status.soldOut")}</option>
-                  </select>
-                  <ChevronDown
-                    size={16}
-                    color={COLORS.mutedText}
-                    style={{ position: "absolute", right: 10, top: 10, pointerEvents: "none" }}
-                  />
-                </div>
-              </div>
+        {loadError && (
+          <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: COLORS.errorBg, color: COLORS.errorText }}>
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} />
+              {(t("agent.inventory.loadError") || "Couldn't load inventory")}: {loadError}
             </div>
-
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>{t("agent.common.table.consignment")}</th>
-                    <th style={thStyle}>{t("agent.common.table.product")}</th>
-                    <th style={thStyle}>{t("agent.common.table.supplier")}</th>
-                    <th style={thStyle}>{t("agent.common.table.received")}</th>
-                    <th style={thStyle}>{t("agent.common.table.sold")}</th>
-                    <th style={thStyle}>{t("agent.common.table.remaining")}</th>
-                    <th style={thStyle}>{t("agent.common.table.status")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((r) => (
-                    <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                      <td style={{ ...tdStyle, fontWeight: 600, color: COLORS.heading }}>{r.id}</td>
-                      <td style={tdStyle}>{product(r.product)}</td>
-                      <td style={{ ...tdStyle, color: COLORS.mutedText }}>{trader(r.supplier)}</td>
-                      <td style={tdStyle}>{r.received.toLocaleString()} {unit}</td>
-                      <td style={tdStyle}>{r.sold.toLocaleString()} {unit}</td>
-                      <td style={tdStyle}>{r.remaining.toLocaleString()} {unit}</td>
-                      <td style={tdStyle}>
-                        <StatusBadge meta={STATUS_META[r.status]} />
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ padding: "40px 20px", textAlign: "center", color: COLORS.mutedText }}>
-                        {t("agent.inventory.noResults")}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <button onClick={fetchInventory} className="rounded-lg border px-3 py-1 text-xs font-medium" style={{ borderColor: COLORS.errorText }}>
+              {t("agent.commissions.retry") || "Retry"}
+            </button>
           </div>
+        )}
 
-          {/* Side column */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {/* Low stock — dark forest panel, mirrors "Owed to suppliers" block */}
-            <div style={{ borderRadius: 16, background: COLORS.forest, padding: 24, color: "#fff" }}>
-              <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-                <AlertTriangle size={20} color={COLORS.gold} />
-                <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, margin: 0 }}>{t("agent.inventory.runningLow")}</h3>
-              </div>
-              {lowStockItems.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {lowStockItems.map((r) => (
-                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                      <span style={{ color: "rgba(255,255,255,0.9)" }}>{product(r.product)}</span>
-                      <span style={{ fontWeight: 600 }}>{r.remaining.toLocaleString()} {unit} {t("agent.common.left")}</span>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 rounded-2xl border bg-white py-16 text-sm" style={{ borderColor: COLORS.border, color: COLORS.muted }}>
+            <Loader2 size={18} className="animate-spin" />
+            {t("agent.inventory.loading") || "Loading inventory…"}
+          </div>
+        ) : (
+          <>
+            {/* Stat cards */}
+            <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+              <StatCard isUr={isUr} icon={Boxes} label={t("agent.inventory.stats.totalReceived")} value={totals.received.toLocaleString()} iconBg="#e2ecd9" iconColor={COLORS.leaf} />
+              <StatCard isUr={isUr} icon={PackageCheck} label={t("agent.inventory.stats.quantitySold")} value={totals.sold.toLocaleString()} iconBg="#f5e6c5" iconColor={COLORS.goldDark} />
+              <StatCard isUr={isUr} icon={Leaf} label={t("agent.inventory.stats.remainingOnHand")} value={totals.remaining.toLocaleString()} iconBg="#e2ecd9" iconColor={COLORS.leaf} />
+              <StatCard isUr={isUr} icon={TrendingDown} label={t("agent.inventory.stats.lowStockCount")} value={totals.lowStockCount} iconBg={COLORS.errorBg} iconColor={COLORS.errorText} />
+            </div>
+
+            <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 340px" }}>
+              {/* Inventory table */}
+              <div className="overflow-hidden rounded-2xl border bg-white" style={{ borderColor: COLORS.border }}>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5" style={{ borderColor: COLORS.border }}>
+                  <h2 className={`text-lg ${headingClass}`} style={{ color: COLORS.ink }}>{t("agent.inventory.consignmentsOnHand")}</h2>
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: COLORS.border }}>
+                      <Search size={16} color={COLORS.iconMuted} />
+                      <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder={t("agent.common.searchProductSupplier")}
+                        className="w-44 border-none bg-transparent text-sm outline-none"
+                        style={{ color: COLORS.ink }}
+                      />
                     </div>
-                  ))}
+                    <div className="relative">
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="appearance-none rounded-lg border bg-white py-2 pl-3 pr-8 text-sm"
+                        style={{ borderColor: COLORS.border, color: COLORS.ink }}
+                      >
+                        <option value="all">{t("agent.common.allStatuses")}</option>
+                        <option value="confirmed">{t("agent.common.status.confirmed")}</option>
+                        <option value="completed">{t("agent.common.status.completed")}</option>
+                        <option value="pending">{t("agent.common.status.awaitingConfirmation")}</option>
+                        <option value="cancelled">{t("agent.common.status.cancelled")}</option>
+                      </select>
+                      <ChevronDown size={16} color={COLORS.iconMuted} className="pointer-events-none absolute right-2.5 top-2.5" />
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>{t("agent.inventory.nothingLow")}</p>
-              )}
-              <button
-                style={{
-                  marginTop: 20,
-                  width: "100%",
-                  borderRadius: 8,
-                  border: "none",
-                  background: COLORS.gold,
-                  padding: "10px 0",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: COLORS.heading,
-                  cursor: "pointer",
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.background = COLORS.goldHover)}
-                onMouseOut={(e) => (e.currentTarget.style.background = COLORS.gold)}
-              >
-                {t("agent.inventory.requestRestock")}
-              </button>
-            </div>
 
-            {/* This month summary */}
-            <div
-              style={{
-                borderRadius: 16,
-                border: `1px solid ${COLORS.border}`,
-                background: COLORS.card,
-                padding: 24,
-                boxShadow: "0 1px 2px rgba(20,20,10,0.04)",
-              }}
-            >
-              <h3 style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : "Georgia, serif", fontSize: 18, color: COLORS.heading, margin: 0 }}>
-                {t("agent.common.thisMonth")}
-              </h3>
-              <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12, fontSize: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>{t("agent.inventory.thisMonth.consignmentsReceived")}</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{rows.length}</span>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.consignment")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.product")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.supplier")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.received")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.sold")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.remaining")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.common.table.status")}</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium" style={{ color: COLORS.muted }}>{t("agent.inventory.table.stock") || "Stock"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((r) => (
+                        <tr key={r.id} className="border-t" style={{ borderColor: COLORS.border }}>
+                          <td className="px-5 py-4 text-sm font-semibold" style={{ color: COLORS.ink }}>#{r.id}</td>
+                          <td className="px-5 py-4 text-sm">{r.itemName ?? "—"}</td>
+                          <td className="px-5 py-4 text-sm" style={{ color: COLORS.muted }}>{r.supplierName ? trader(r.supplierName) : (r.supplierId ? `#${r.supplierId}` : "—")}</td>
+                          <td className="px-5 py-4 text-sm">{r.received.toLocaleString()} {r.unit}</td>
+                          <td className="px-5 py-4 text-sm">{r.sold.toLocaleString()} {r.unit}</td>
+                          <td className="px-5 py-4 text-sm">{r.remaining.toLocaleString()} {r.unit}</td>
+                          <td className="px-5 py-4 text-sm">
+                            <StatusBadge meta={LIFECYCLE_META[r.status]} />
+                          </td>
+                          <td className="px-5 py-4 text-sm">
+                            <StatusBadge meta={r.stockStatus ? STOCK_META[r.stockStatus] : null} />
+                          </td>
+                        </tr>
+                      ))}
+                      {filtered.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-5 py-10 text-center text-sm" style={{ color: COLORS.muted }}>
+                            {t("agent.inventory.noResults")}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>{t("agent.inventory.thisMonth.quantitySold")}</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>{totals.sold.toLocaleString()} {unit}</span>
+              </div>
+
+              {/* Side column */}
+              <div className="flex flex-col gap-6">
+                {/* Low stock — dark forest panel */}
+                <div className="rounded-2xl p-6 text-white" style={{ backgroundColor: COLORS.forest }}>
+                  <div className="mb-4 flex items-center gap-2">
+                    <AlertTriangle size={20} color={COLORS.gold} />
+                    <h3 className={`text-lg ${headingClass}`}>{t("agent.inventory.runningLow")}</h3>
+                  </div>
+                  {lowStockItems.length > 0 ? (
+                    <div className="flex flex-col gap-3">
+                      {lowStockItems.map((r) => (
+                        <div key={r.id} className="flex justify-between text-sm">
+                          <span style={{ color: "rgba(255,255,255,0.9)" }}>{r.itemName ?? `#${r.id}`}</span>
+                          <span className="font-semibold">{r.remaining.toLocaleString()} {r.unit} {t("agent.common.left")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>{t("agent.inventory.nothingLow")}</p>
+                  )}
+                  {/* No "request restock" endpoint exists anywhere in the
+                      handler layer — repurposed to jump to the intake form,
+                      the closest real action. Flag if this should point
+                      somewhere else instead. */}
+                  <button
+                    onClick={() => navigate("/agent/consignment-intake")}
+                    className="mt-5 w-full rounded-lg py-2.5 text-sm font-medium transition-transform active:scale-[0.99]"
+                    style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
+                  >
+                    {t("agent.inventory.requestRestock")}
+                  </button>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: COLORS.mutedText }}>{t("agent.inventory.thisMonth.sellThroughRate")}</span>
-                  <span style={{ fontWeight: 600, color: COLORS.heading }}>
-                    {totals.received ? Math.round((totals.sold / totals.received) * 100) : 0}%
-                  </span>
+
+                {/* This month summary */}
+                <div className="rounded-2xl border bg-white p-6" style={{ borderColor: COLORS.border }}>
+                  <h3 className={`text-lg ${headingClass}`} style={{ color: COLORS.ink }}>{t("agent.common.thisMonth")}</h3>
+                  <div className="mt-4 flex flex-col gap-3 text-sm">
+                    <div className="flex justify-between">
+                      <span style={{ color: COLORS.muted }}>{t("agent.inventory.thisMonth.consignmentsReceived")}</span>
+                      <span className="font-semibold" style={{ color: COLORS.ink }}>{rows.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span style={{ color: COLORS.muted }}>{t("agent.inventory.thisMonth.quantitySold")}</span>
+                      <span className="font-semibold" style={{ color: COLORS.ink }}>{totals.sold.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span style={{ color: COLORS.muted }}>{t("agent.inventory.thisMonth.sellThroughRate")}</span>
+                      <span className="font-semibold" style={{ color: COLORS.ink }}>
+                        {totals.received ? Math.round((totals.sold / totals.received) * 100) : 0}%
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

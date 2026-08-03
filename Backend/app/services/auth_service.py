@@ -21,7 +21,7 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
 )
-from app.utils.notifications import send_otp_email
+# from app.utils.notifications import send_otp_email
 
 
 async def signup(db: AsyncSession, data: SignupRequest) -> Party:
