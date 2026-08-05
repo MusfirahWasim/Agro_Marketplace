@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Sprout, Plus, Minus, ShoppingCart, X } from "lucide-react";
-import { CATEGORIES, CONSIGNMENTS } from "../data/consignments";
+import { Search, Sprout, Plus, Minus, ShoppingCart, X, Loader2 } from "lucide-react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { localizeProduct, localizeCategory, localizeTrader } from "../i18n/dataLocale";
+import { browseMarketplace } from "../handlers/consignment";
 
 const COLORS = {
   forest: "#1e4620",
@@ -25,41 +25,78 @@ export default function BuyerMarketplace() {
   const product = (name) => localizeProduct(name, language);
   const category = (name) => localizeCategory(name, language);
   const trader = (name) => localizeTrader(name, language);
+
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
-  const [cart, setCart] = useState({}); // consignId -> qty
+  const [cart, setCart] = useState({}); // consigned_id -> qty
   const [showCart, setShowCart] = useState(false);
 
-  const filtered = CONSIGNMENTS.filter((c) => {
+  const [consignments, setConsignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setLoadError(null);
+      const { data, error } = await browseMarketplace();
+      if (cancelled) return;
+
+      if (error) {
+        setLoadError(error);
+      } else {
+        setConsignments(data);
+      }
+      setLoading(false);
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Derived from the actual fetched consignments, not a separate
+  // /api/supplies/categories call — that endpoint returns every
+  // category across ALL supplies, including ones with nothing
+  // currently for sale. Scoping to what's really on the marketplace
+  // right now is more correct for a filter list.
+  const categories = ["All", ...new Set(consignments.map((c) => c.category).filter(Boolean))];
+
+  const filtered = consignments.filter((c) => {
     const matchesSearch =
-      c.product.toLowerCase().includes(search.toLowerCase()) ||
-      product(c.product).includes(search);
+      (c.item_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      product(c.item_name).toLowerCase().includes(search.toLowerCase());
     const matchesCategory = activeCategory === "All" || c.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const addToCart = (consignId) => {
-    setCart((prev) => ({ ...prev, [consignId]: (prev[consignId] || 0) + 1 }));
+  const addToCart = (consignedId) => {
+    setCart((prev) => ({ ...prev, [consignedId]: (prev[consignedId] || 0) + 1 }));
   };
 
-  const decrement = (consignId) => {
+  const decrement = (consignedId) => {
     setCart((prev) => {
       const next = { ...prev };
-      if (next[consignId] <= 1) {
-        delete next[consignId];
+      if (next[consignedId] <= 1) {
+        delete next[consignedId];
       } else {
-        next[consignId] -= 1;
+        next[consignedId] -= 1;
       }
       return next;
     });
   };
 
-  const cartItems = Object.entries(cart).map(([consignId, qty]) => {
-    const item = CONSIGNMENTS.find((c) => c.consignId === consignId);
+  const cartItems = Object.entries(cart).map(([consignedId, qty]) => {
+    // consigned_id from the backend is a number; object keys are always
+    // strings, so compare loosely rather than requiring exact type match
+    const item = consignments.find((c) => String(c.consigned_id) === consignedId);
     return { ...item, qty };
   });
 
-  const cartTotal = cartItems.reduce((sum, i) => sum + i.qty * i.price, 0);
+  const cartTotal = cartItems.reduce((sum, i) => sum + i.qty * i.selling_price_per_unit, 0);
   const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
   const currency = t("buyer.common.currency");
 
@@ -111,10 +148,8 @@ export default function BuyerMarketplace() {
             style={{ borderColor: COLORS.border, backgroundColor: "white" }}
           />
         </div>
-        {/* Category values (c) stay as the underlying English keys used for
-            filtering — only the displayed label is localized via category(). */}
         <div className="flex gap-2 flex-wrap">
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <button
               key={c}
               onClick={() => setActiveCategory(c)}
@@ -125,86 +160,106 @@ export default function BuyerMarketplace() {
                   : { color: COLORS.sub, borderColor: COLORS.border }
               }
             >
-              {category(c)}
+              {c === "All" ? c : category(c)}
             </button>
           ))}
         </div>
       </div>
 
+      {/* loading / error states */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 size={22} className="animate-spin" color={COLORS.forest} />
+        </div>
+      )}
+
+      {!loading && loadError && (
+        <div
+          className="text-sm rounded-lg px-4 py-3 mb-6"
+          style={{ backgroundColor: "#faeaea", color: "#b5544a" }}
+        >
+          {loadError}
+        </div>
+      )}
+
       {/* product grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {filtered.map((c) => (
-          <div
-            key={c.consignId}
-            onClick={() => navigate(`/buyer/product/${c.consignId}`)}
-            className="rounded-xl border p-4 flex flex-col cursor-pointer transition-shadow hover:shadow-md"
-            style={{ backgroundColor: "white", borderColor: COLORS.greige }}
-          >
+      {!loading && !loadError && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {filtered.map((c) => (
             <div
-              className="w-11 h-11 rounded-full flex items-center justify-center mb-3"
-              style={{ backgroundColor: "#eaf1e4" }}
+              key={c.consigned_id}
+              onClick={() => navigate(`/buyer/product/${c.consigned_id}`)}
+              className="rounded-xl border p-4 flex flex-col cursor-pointer transition-shadow hover:shadow-md"
+              style={{ backgroundColor: "white", borderColor: COLORS.greige }}
             >
-              <Sprout size={20} color={COLORS.leaf} />
-            </div>
-            <h3 className="font-display text-base mb-0.5" style={{ color: COLORS.ink }}>
-              {product(c.product)}
-            </h3>
-            <p className="text-xs mb-3" style={{ color: COLORS.sub }}>
-              {t("buyer.common.via", { agent: trader(c.agent) })}
-            </p>
-
-            <div className="flex items-center justify-between text-xs mb-4" style={{ color: COLORS.sub }}>
-              <span>{t("buyer.common.availableUnit", { count: c.available, unit: c.unit })}</span>
-              <span className="font-medium" style={{ color: COLORS.ink }}>
-                {currency} {c.price}/{c.unit}
-              </span>
-            </div>
-
-            {cart[c.consignId] ? (
-              <div className="flex items-center justify-between mt-auto" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => decrement(c.consignId)}
-                  className="w-8 h-8 rounded-lg border flex items-center justify-center"
-                  style={{ borderColor: COLORS.border }}
-                >
-                  <Minus size={14} color={COLORS.ink} />
-                </button>
-                <span className="font-medium text-sm" style={{ color: COLORS.ink }}>
-                  {cart[c.consignId]}
-                </span>
-                <button
-                  onClick={() => addToCart(c.consignId)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: COLORS.gold }}
-                >
-                  <Plus size={14} color={COLORS.forestDark} />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  addToCart(c.consignId);
-                }}
-                className="mt-auto flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium"
-                style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
+              <div
+                className="w-11 h-11 rounded-full flex items-center justify-center mb-3"
+                style={{ backgroundColor: "#eaf1e4" }}
               >
-                <Plus size={14} />
-                {t("buyer.marketplace.add")}
-              </button>
-            )}
-          </div>
-        ))}
+                <Sprout size={20} color={COLORS.leaf} />
+              </div>
+              <h3 className="font-display text-base mb-0.5" style={{ color: COLORS.ink }}>
+                {product(c.item_name)}
+              </h3>
+              <p className="text-xs mb-3" style={{ color: COLORS.sub }}>
+                {t("buyer.common.via", { agent: trader(c.agent_name) })}
+              </p>
 
-        {filtered.length === 0 && (
-          <div
-            className="col-span-full text-center py-12 rounded-xl border"
-            style={{ borderColor: COLORS.greige, color: COLORS.sub }}
-          >
-            {t("buyer.marketplace.noResults")}
-          </div>
-        )}
-      </div>
+              <div className="flex items-center justify-between text-xs mb-4" style={{ color: COLORS.sub }}>
+                <span>
+                  {t("buyer.common.availableUnit", { count: c.quantity_remaining, unit: c.unit })}
+                </span>
+                <span className="font-medium" style={{ color: COLORS.ink }}>
+                  {currency} {c.selling_price_per_unit}/{c.unit}
+                </span>
+              </div>
+
+              {cart[c.consigned_id] ? (
+                <div className="flex items-center justify-between mt-auto" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => decrement(c.consigned_id)}
+                    className="w-8 h-8 rounded-lg border flex items-center justify-center"
+                    style={{ borderColor: COLORS.border }}
+                  >
+                    <Minus size={14} color={COLORS.ink} />
+                  </button>
+                  <span className="font-medium text-sm" style={{ color: COLORS.ink }}>
+                    {cart[c.consigned_id]}
+                  </span>
+                  <button
+                    onClick={() => addToCart(c.consigned_id)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: COLORS.gold }}
+                  >
+                    <Plus size={14} color={COLORS.forestDark} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addToCart(c.consigned_id);
+                  }}
+                  className="mt-auto flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium"
+                  style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
+                >
+                  <Plus size={14} />
+                  {t("buyer.marketplace.add")}
+                </button>
+              )}
+            </div>
+          ))}
+
+          {filtered.length === 0 && (
+            <div
+              className="col-span-full text-center py-12 rounded-xl border"
+              style={{ borderColor: COLORS.greige, color: COLORS.sub }}
+            >
+              {t("buyer.marketplace.noResults")}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* cart drawer */}
       {showCart && (
@@ -236,20 +291,20 @@ export default function BuyerMarketplace() {
 
               {cartItems.map((item) => (
                 <div
-                  key={item.consignId}
+                  key={item.consigned_id}
                   className="rounded-lg border p-3 flex items-center justify-between"
                   style={{ backgroundColor: "white", borderColor: COLORS.greige }}
                 >
                   <div>
                     <p className="text-sm font-medium" style={{ color: COLORS.ink }}>
-                      {product(item.product)}
+                      {product(item.item_name)}
                     </p>
                     <p className="text-xs" style={{ color: COLORS.sub }}>
-                      {item.qty} &times; {currency} {item.price}
+                      {item.qty} &times; {currency} {item.selling_price_per_unit}
                     </p>
                   </div>
                   <p className="text-sm font-medium" style={{ color: COLORS.leaf }}>
-                    {currency} {(item.qty * item.price).toLocaleString()}
+                    {currency} {(item.qty * item.selling_price_per_unit).toLocaleString()}
                   </p>
                 </div>
               ))}

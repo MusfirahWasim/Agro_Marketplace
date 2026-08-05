@@ -1,10 +1,12 @@
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
+from sqlalchemy.orm import aliased
 from fastapi import HTTPException
 
 from app.models.consignment import Consignment
 from app.models.party import Party
+from app.models.supply import Supply
 from app.schemas.consignment import ConsignmentCreate, ConsignmentStatusUpdate
 from app.services.supply_service import get_supply, get_supply_for_update, deduct_stock
 
@@ -47,12 +49,52 @@ async def create_consignment(db: AsyncSession, agent: Party, data: ConsignmentCr
 
 
 async def get_consignment(db: AsyncSession, consigned_id: int) -> Consignment:
+    """
+    BuyerProductDetail.jsx, plus internal ownership checks elsewhere in
+    this file. Joins Supply (item_name, category, unit, description) and
+    Party TWICE — once for the agent, once for the supplier, since both
+    are Party rows and a single join can't distinguish them — hence
+    aliased(). Sets results as plain attributes on the ORM object, same
+    pattern as list_marketplace_consignments.
+    """
+    AgentParty = aliased(Party)
+    SupplierParty = aliased(Party)
+
     result = await db.execute(
-        select(Consignment).where(Consignment.consigned_id == consigned_id)
+        select(
+            Consignment,
+            Supply.item_name,
+            Supply.category,
+            Supply.unit,
+            Supply.description,
+            AgentParty.name,
+            SupplierParty.name,
+        )
+        .join(Supply, Consignment.supply_id == Supply.supply_id)
+        .join(
+            AgentParty,
+            and_(Consignment.agent_id == AgentParty.party_id, Consignment.agent_type == AgentParty.party_type),
+        )
+        .join(
+            SupplierParty,
+            and_(
+                Consignment.supplier_id == SupplierParty.party_id,
+                Consignment.supplier_type == SupplierParty.party_type,
+            ),
+        )
+        .where(Consignment.consigned_id == consigned_id)
     )
-    consignment = result.scalar_one_or_none()
-    if not consignment:
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Consignment not found")
+
+    consignment, item_name, category, unit, description, agent_name, supplier_name = row
+    consignment.item_name = item_name
+    consignment.category = category
+    consignment.unit = unit
+    consignment.description = description
+    consignment.agent_name = agent_name
+    consignment.supplier_name = supplier_name
     return consignment
 
 
@@ -96,14 +138,34 @@ async def list_marketplace_consignments(db: AsyncSession) -> List[Consignment]:
     BuyerMarketplace.jsx — only confirmed consignments with stock left
     are purchasable. 'pending' consignments haven't been accepted for
     sale yet, and 'cancelled'/'completed' have nothing left to sell.
+
+    Joins Supply (item_name, category, unit) and Party (agent_name) so
+    ConsignmentRead's denormalized fields are actually populated —
+    previously this just returned the raw row and those came back null.
+    Sets them as plain attributes on the ORM object post-query; Pydantic's
+    from_attributes reads them the same as a real mapped column.
     """
     result = await db.execute(
-        select(Consignment).where(
+        select(Consignment, Supply.item_name, Supply.category, Supply.unit, Party.name)
+        .join(Supply, Consignment.supply_id == Supply.supply_id)
+        .join(
+            Party,
+            and_(Consignment.agent_id == Party.party_id, Consignment.agent_type == Party.party_type),
+        )
+        .where(
             Consignment.status == "confirmed",
             Consignment.quantity_remaining > 0,
         )
     )
-    return result.scalars().all()
+
+    consignments = []
+    for consignment, item_name, category, unit, agent_name in result.all():
+        consignment.item_name = item_name
+        consignment.category = category
+        consignment.unit = unit
+        consignment.agent_name = agent_name
+        consignments.append(consignment)
+    return consignments
 
 
 # Explicit state machine — completed/cancelled are terminal (no

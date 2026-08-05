@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.models.order import Order
 from app.models.consignment import Consignment
+from app.models.supply import Supply
 from app.models.payment import Payment
 from app.models.party import Party
 from app.schemas.order import OrderCreate, OrderStatusUpdate
@@ -103,9 +104,30 @@ async def get_order(db: AsyncSession, order_id: int) -> Order:
 
 
 async def list_orders_for_buyer(db: AsyncSession, buyer_id: int) -> List[Order]:
-    """BuyerOrders.jsx"""
-    result = await db.execute(select(Order).where(Order.buyer_id == buyer_id))
-    return result.scalars().all()
+    """
+    BuyerOrders.jsx. Joins through to Supply for product_name, and
+    computes payment_status/amount_paid per row via get_payment_status.
+    This is the one list endpoint where that N+1 cost is worth paying —
+    payment status (Paid/Due/Refunded) is the entire reason this screen
+    exists. list_orders_for_agent and list_all_orders deliberately still
+    skip this.
+    """
+    result = await db.execute(
+        select(Order, Supply.item_name)
+        .join(Consignment, Order.consigned_id == Consignment.consigned_id)
+        .join(Supply, Consignment.supply_id == Supply.supply_id)
+        .where(Order.buyer_id == buyer_id)
+        .order_by(Order.order_date.desc())
+    )
+
+    orders = []
+    for order, item_name in result.all():
+        order.product_name = item_name
+        payment_info = await get_payment_status(db, order)
+        order.payment_status = payment_info["payment_status"]
+        order.amount_paid = payment_info["amount_paid"]
+        orders.append(order)
+    return orders
 
 
 async def list_orders_for_agent(db: AsyncSession, agent_id: int) -> List[Order]:

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from urllib.parse import quote_plus
 
 class Settings(BaseSettings):
     APP_NAME: str = "AISAMMS"
@@ -19,12 +20,11 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        # Built from the individual DB_* fields above rather than set directly —
-        # uses aiomysql since database.py's engine is created with
-        # create_async_engine, which needs an async-compatible driver.
+        password = quote_plus(self.DB_PASSWORD)
+
         return (
-            f"mysql+aiomysql://{self.DB_USER}:{self.DB_PASSWORD}"
-            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        f"mysql+aiomysql://{self.DB_USER}:{password}"
+        f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
     # Used by utils/otp.py for the forgot-password flow (SMS OTP)

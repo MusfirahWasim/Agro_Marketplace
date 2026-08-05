@@ -9,11 +9,22 @@ from app.routers import auth, party, supply, consignment, order, payment, accoun
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # verify the DB is actually reachable on startup, not just that the
-    # engine object was created (create_async_engine doesn't connect eagerly)
+    # Verify the database is reachable
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
-    print("Database connection OK")
+        print("Database connection OK")
+
+        # List all tables
+        result = await conn.execute(text("SHOW TABLES"))
+        tables = result.fetchall()
+
+        print("\nTables in database:")
+        if tables:
+            for table in tables:
+                print(f" - {table[0]}")
+        else:
+            print("No tables found.")
+
     try:
         yield
     finally:
@@ -47,6 +58,6 @@ app.include_router(account.router)
 app.include_router(commission.router)
 app.include_router(admin.router)
 
-@app.get("/health")
+@app.get("/")
 async def health():
     return {"status": "ok"}

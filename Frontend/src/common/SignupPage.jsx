@@ -7,7 +7,6 @@ import {
   User,
   Eye,
   EyeOff,
-  Building2,
   ArrowRight,
   Check,
   Leaf,
@@ -21,12 +20,20 @@ import { signup } from "../handlers/auth";
 /**
  * SignupPage
  * Matches the Modern Organic & Eco-Friendly theme established on LoginPage —
- * now using the full COLORS token system throughout (not just the left
- * panel), and the same input markup pattern (absolute-positioned icons).
+ * full COLORS token system throughout, same input markup pattern
+ * (absolute-positioned icons).
  *
  * Roles: Supplier / Commission Agent / Buyer
- * (Admins are provisioned separately — see "Sign up to AISAMMS" on Login,
- * which is actually this page's own reverse link back to /login)
+ * (Admins are provisioned separately.)
+ *
+ * NOTE on the single name field: parties.name is ONE column — there is
+ * no separate "business name" field on the backend. This form used to
+ * collect a second "org/farm/agency name" for Supplier/Agent and only
+ * send that as `name`, silently dropping fullName. That's been removed
+ * — there is now only one name field, sent as-is for every role. If the
+ * business actually needs a distinct display name from a contact
+ * person's name later, that requires a real schema column
+ * (e.g. parties.business_name) — not a frontend-only fix.
  *
  * RTL handling: the outer wrapper is forced dir="ltr" so the two columns
  * never swap position. Only the right form panel gets dir={isRTL ? "rtl" : "ltr"}.
@@ -38,13 +45,6 @@ const ROLES = [
   { key: "buyer", labelKey: "common.roles.buyer" },
 ];
 
-// orgLabelKey/orgPlaceholderKey point into signup.orgLabel / signup.orgPlaceholder
-const ROLE_ORG_FIELD = {
-  supplier: { name: "orgName", labelKey: "signup.orgLabel.supplier", placeholderKey: "signup.orgPlaceholder.supplier" },
-  agent: { name: "orgName", labelKey: "signup.orgLabel.agent", placeholderKey: "signup.orgPlaceholder.agent" },
-  buyer: null,
-};
-
 // Maps the UI role key to the backend's party_type code. Admin is
 // deliberately absent — self-signup only covers these 3, same
 // restriction already enforced server-side by SignupRequest.
@@ -53,6 +53,14 @@ const ROLE_TO_PARTY_TYPE = {
   agent: "CA",
   buyer: "B",
 };
+
+// Basic client-side format checks — not exhaustive, just enough to
+// catch obviously malformed input before a round trip.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Digits only (spaces/dashes stripped before testing), 7–13 digits —
+// upper bound matches parties.phone VARCHAR(13) exactly, so nothing
+// the backend would reject on length can even be submitted.
+const PHONE_DIGITS_REGEX = /^\d{7,13}$/;
 
 const COLORS = {
   forest: "#1e4620",
@@ -81,12 +89,9 @@ export default function SignupPage() {
     fullName: "",
     email: "",
     phone: "",
-    orgName: "",
     password: "",
     confirmPassword: "",
   });
-
-  const orgField = ROLE_ORG_FIELD[role];
 
   function updateField(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -100,8 +105,14 @@ export default function SignupPage() {
       setError(t("signup.errors.requiredFields"));
       return;
     }
-    if (orgField && !form.orgName) {
-      setError(t("signup.errors.orgRequired", { field: t(orgField.labelKey).toLowerCase() }));
+    if (!EMAIL_REGEX.test(form.email)) {
+      // Hardcoded, not run through t() — translations.js changes are
+      // off-limits right now.
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (!PHONE_DIGITS_REGEX.test(form.phone.replace(/[\s-]/g, ""))) {
+      setError("Please enter a valid phone number (7 to 13 digits).");
       return;
     }
     if (form.password.length < 8) {
@@ -119,14 +130,10 @@ export default function SignupPage() {
 
     setSubmitting(true);
 
-    // NOTE: parties.name is a single column — there's nowhere to store
-    // BOTH fullName and orgName. For Supplier/Agent we send orgName as
-    // `name` (that's what shows up everywhere — "Ahmed Farms", "Rafiq
-    // Traders"); fullName is NOT transmitted for those two roles. This
-    // needs a real decision (new schema column, or drop the fullName
-    // field from the form) — flagged, not silently resolved.
+    // One name field, sent as-is — matches parties.name exactly, no
+    // more silent dropping of data. See the file-level comment above.
     const payload = {
-      name: orgField ? form.orgName : form.fullName,
+      name: form.fullName,
       party_type: ROLE_TO_PARTY_TYPE[role],
       phone: form.phone,
       email: form.email,
@@ -289,24 +296,6 @@ export default function SignupPage() {
                 isRTL={isRTL}
               />
             </Field>
-
-            {/* Org / farm / agency name — only for supplier & agent.
-                This is the value actually sent as `name` to the backend
-                for these two roles — see the payload comment above. */}
-            {orgField && (
-              <Field label={t(orgField.labelKey)} required>
-                <IconInput
-                  icon={<Building2 size={17} />}
-                  type="text"
-                  placeholder={t(orgField.placeholderKey)}
-                  value={form.orgName}
-                  onChange={(v) => updateField("orgName", v)}
-                  autoComplete="organization"
-                  maxLength={50}
-                  isRTL={isRTL}
-                />
-              </Field>
-            )}
 
             <Field label={t("signup.emailLabel")} required>
               <IconInput

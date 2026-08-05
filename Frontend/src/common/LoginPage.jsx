@@ -3,7 +3,7 @@ import { Leaf, Mail, Lock, Eye, EyeOff, ArrowRight, Wheat, Loader2 } from "lucid
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
-import { login } from "../handlers/auth";
+import { login, logout } from "../handlers/auth";
 
 const ROLES = [
   { key: "supplier", labelKey: "common.roles.supplier" },
@@ -11,16 +11,28 @@ const ROLES = [
   { key: "buyer", labelKey: "common.roles.buyer" },
 ];
 
-// Maps the REAL party_type returned by the backend to a route — this is
-// what actually decides where the user lands, not the tile they clicked.
-// A selecting "Buyer" but logging in with a Supplier account will still
-// correctly land on /supplier/dashboard once the backend responds.
+// Maps the REAL party_type returned by the backend to a route.
 const ROLE_ROUTES = {
   S: "/supplier/dashboard",
   CA: "/agent/dashboard",
   B: "/buyer/marketplace",
   A: "/admin/dashboard",
 };
+
+// The reverse — what party_type the selected tile REQUIRES. Login is
+// now rejected if the account's real role doesn't match the tile
+// clicked, even though the credentials are correct — a deliberate
+// product decision (not the more forgiving "auto-route to their real
+// dashboard regardless of tile" behavior this used to have).
+const ROLE_TO_PARTY_TYPE = {
+  supplier: "S",
+  agent: "CA",
+  buyer: "B",
+};
+
+// Basic client-side format check — not exhaustive RFC 5322 validation,
+// just enough to catch obviously malformed input before a round trip.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const COLORS = {
   forest: "#1e4620",
@@ -46,6 +58,15 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    if (!EMAIL_REGEX.test(email)) {
+      // Hardcoded, not run through t() — translations.js changes are
+      // off-limits right now, same known limitation as backend error
+      // messages below.
+      setError("Please enter a valid email address.");
+      return;
+    }
+
     setLoading(true);
 
     const { data, error: loginError } = await login({ email, password });
@@ -56,6 +77,17 @@ export default function LoginPage() {
       // Raw message from the backend (e.g. "Invalid email or password") —
       // not run through t(), since API error text isn't localized yet.
       setError(loginError);
+      return;
+    }
+
+    if (data.party_type !== ROLE_TO_PARTY_TYPE[role]) {
+      // Credentials were correct — this IS a real account — but it's
+      // not the role selected on the tile. login() already stored
+      // tokens for this account as a side effect of the successful
+      // API call; clear them since we're refusing this login attempt.
+      logout();
+      const selectedRoleLabel = t(ROLES.find((r) => r.key === role)?.labelKey);
+      setError(`This account is not registered as a ${selectedRoleLabel}. Please select the correct role and try again.`);
       return;
     }
 
@@ -318,7 +350,15 @@ export default function LoginPage() {
 
           <p className="text-center text-sm mt-8" style={{ color: "#6b7568" }}>
             {t("login.newToAisamms")}{" "}
-            <a href="/signup" className="font-medium" style={{ color: COLORS.forest }}>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/signup");
+              }}
+              className="font-medium"
+              style={{ color: COLORS.forest }}
+            >
               {t("login.contactAdmin")}
             </a>
           </p>

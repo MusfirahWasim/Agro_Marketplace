@@ -41,12 +41,24 @@ function resolvePendingQueue(error, token = null) {
   pendingQueue = [];
 }
 
+// Auth endpoints are excluded from the refresh logic below — a 401
+// from /login (wrong password) or /signup (e.g. duplicate email) is
+// NOT an expired-token situation. Without this exclusion, a wrong
+// password would incorrectly trigger a refresh attempt using whatever
+// stale/missing tokens are in localStorage, and on failure fire the
+// window.location.href hard redirect below — which interrupts
+// LoginPage.jsx's normal error handling before it ever gets to show
+// the error banner. This was the actual cause of "wrong password
+// routes to a blank dashboard" — not a bug in LoginPage.jsx itself.
+const AUTH_ENDPOINTS = ["/api/auth/login", "/api/auth/signup", "/api/auth/refresh"];
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const isAuthEndpoint = AUTH_ENDPOINTS.some((path) => originalRequest?.url?.includes(path));
 
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    if (error.response?.status !== 401 || originalRequest._retry || isAuthEndpoint) {
       return Promise.reject(error);
     }
 

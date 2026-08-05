@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import {
   Leaf,
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
+import { getMyProfile } from "../handlers/party";
 
 const COLORS = {
   forest: "#1e4620",
@@ -34,7 +35,6 @@ const COLORS = {
 
 const NAV_CONFIG = {
   supplier: {
-    name: "Ahmed Farms",
     subtitleKey: "common.roles.supplier",
     links: [
       { to: "/supplier/dashboard", labelKey: "common.nav.dashboard", icon: LayoutDashboard },
@@ -43,7 +43,6 @@ const NAV_CONFIG = {
     ],
   },
   agent: {
-    name: "Rafiq Traders",
     subtitleKey: "common.roles.agent",
     links: [
       { to: "/agent/dashboard", labelKey: "common.nav.dashboard", icon: LayoutDashboard },
@@ -56,7 +55,6 @@ const NAV_CONFIG = {
     ],
   },
   buyer: {
-    name: "Green Valley Store",
     subtitleKey: "common.roles.buyer",
     links: [
       { to: "/buyer/marketplace", labelKey: "common.nav.marketplace", icon: Store },
@@ -71,6 +69,29 @@ export default function Layout({ role }) {
   const { t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const config = NAV_CONFIG[role] || NAV_CONFIG.supplier;
+
+  const [profileName, setProfileName] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMyProfile().then(({ data }) => {
+      if (!cancelled && data?.name) setProfileName(data.name);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayName = profileName ?? "";
+  const initials = displayName
+    ? displayName
+        .split(" ")
+        .map((w) => w[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "";
 
   const handleLogout = () => {
     navigate("/login");
@@ -187,15 +208,11 @@ export default function Layout({ role }) {
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium"
                 style={{ backgroundColor: COLORS.greige, color: COLORS.forest }}
               >
-                {config.name
-                  .split(" ")
-                  .map((w) => w[0])
-                  .slice(0, 2)
-                  .join("")}
+                {initials}
               </div>
               <div className="hidden sm:block leading-tight">
                 <p className="text-sm font-medium" style={{ color: COLORS.ink }}>
-                  {config.name}
+                  {displayName}
                 </p>
                 <p className="text-xs" style={{ color: COLORS.sub }}>
                   {t(config.subtitleKey)}

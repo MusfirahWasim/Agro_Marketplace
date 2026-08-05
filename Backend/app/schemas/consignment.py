@@ -60,3 +60,4 @@ class ConsignmentRead(BaseModel):
     unit: Optional[str] = None
     supplier_name: Optional[str] = None
     agent_name: Optional[str] = None
+    description: Optional[str] = None
