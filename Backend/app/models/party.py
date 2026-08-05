@@ -7,13 +7,21 @@ class Party(Base):
     """
     Maps to the `parties` table — the single table shared by all four
     roles (Supplier, Buyer, Commission Agent, Admin), distinguished by
-    `party_type`. Primary key is composite: (party_id, party_type).
+    `party_type`.
     """
 
     __tablename__ = "parties"
 
-    party_id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
-    party_type = Column(ENUM("S", "B", "CA", "A"), primary_key=True)
+    party_id = Column(
+        INTEGER(unsigned=True),
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    party_type = Column(
+        ENUM("S", "B", "CA", "A"),
+        nullable=False,
+    )
     # S = Supplier, B = Buyer, CA = Commission Agent, A = Admin
 
     name = Column(String(50), nullable=False)
@@ -32,4 +40,8 @@ class Party(Base):
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
     def __repr__(self):
-        return f"<Party party_id={self.party_id} party_type={self.party_type} name={self.name!r}>"
+        return (
+            f"<Party party_id={self.party_id} "
+            f"party_type={self.party_type} "
+            f"name={self.name!r}>"
+        )

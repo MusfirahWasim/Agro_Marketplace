@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, TIMESTAMP, ForeignKeyConstraint, func
+from sqlalchemy import Column, String, Boolean, TIMESTAMP, ForeignKey, func
 from sqlalchemy.dialects.mysql import INTEGER, ENUM
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -13,20 +13,22 @@ class OTPToken(Base):
     """
 
     __tablename__ = "otp_tokens"
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["party_id", "party_type"],
-            ["parties.party_id", "parties.party_type"],
-        ),
-    )
 
     otp_id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
 
-    party_id = Column(INTEGER(unsigned=True), nullable=False)
+    party_id = Column(
+        INTEGER(unsigned=True),
+        ForeignKey("parties.party_id"),
+        nullable=False,
+    )
     party_type = Column(ENUM("S", "B", "CA", "A"), nullable=False)
 
     otp_code = Column(String(10), nullable=False)
-    purpose = Column(ENUM("password_reset"), nullable=False, server_default="password_reset")
+    purpose = Column(
+        ENUM("password_reset"),
+        nullable=False,
+        server_default="password_reset",
+    )
 
     is_used = Column(Boolean, nullable=False, server_default="0")
     expires_at = Column(TIMESTAMP, nullable=False)
@@ -34,7 +36,7 @@ class OTPToken(Base):
 
     party = relationship(
         "Party",
-        foreign_keys=[party_id, party_type],
+        foreign_keys=[party_id],
         backref="otp_tokens",
     )
 
