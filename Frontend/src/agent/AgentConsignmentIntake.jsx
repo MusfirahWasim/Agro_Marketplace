@@ -70,7 +70,7 @@ const COLORS = {
 // Single place to fix field names if the real consignment response differs.
 function normalizeConsignment(raw) {
   return {
-    id: raw.id,
+    id: raw.consigned_id,
     supplyId: raw.supply_id,
     itemName: raw.item_name ?? raw.supply?.item_name ?? null,
     supplierId: raw.supplier_id ?? raw.supply?.supplier_id ?? null,
@@ -81,7 +81,7 @@ function normalizeConsignment(raw) {
     commissionRate: raw.commission_rate,
     paymentTerm: raw.payment_term,
     status: raw.status, // "pending" | "confirmed" | "completed" | "cancelled"
-    date: raw.created_at ?? raw.date ?? null,
+    date: raw.consigned_at ?? raw.date ?? null,
   };
 }
 
@@ -231,7 +231,7 @@ export default function AgentConsignmentIntake() {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  const selectedSupply = supplies.find((s) => String(s.id) === String(form.supplyId));
+  const selectedSupply = supplies.find((s) => String(s.supply_id) === String(form.supplyId));
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -372,7 +372,7 @@ export default function AgentConsignmentIntake() {
                           : (t("agent.consignmentIntake.form.selectSupply") || "Select a supply")}
                       </option>
                       {supplies.map((s) => (
-                        <option key={s.id} value={s.id}>
+                        <option key={s.supply_id} value={s.supply_id}>
                           {s.item_name} — {s.current_stock} {s.unit} @ {t("buyer.common.currency")} {s.cost_per_unit}
                         </option>
                       ))}

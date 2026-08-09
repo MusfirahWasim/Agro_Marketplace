@@ -51,7 +51,7 @@ const COLORS = {
 
 function normalizeConsignment(raw) {
   return {
-    id: raw.id,
+    id: raw.consigned_id,
     itemName: raw.item_name ?? raw.supply?.item_name ?? null,
     supplierName: raw.supplier?.name ?? raw.supplier_name ?? null,
     supplierId: raw.supplier_id ?? raw.supply?.supplier_id ?? null,

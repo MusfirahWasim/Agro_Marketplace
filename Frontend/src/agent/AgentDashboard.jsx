@@ -70,7 +70,7 @@ function normalizeOrder(raw) {
 
 function normalizeCommission(raw) {
   return {
-    id: raw.id,
+    id: raw.consigned_id,
     commissionAmount: raw.commission_amount,
     rate: raw.commission_rate,
     date: raw.created_at ?? null,
