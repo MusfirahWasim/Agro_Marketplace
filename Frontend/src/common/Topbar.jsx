@@ -1,4 +1,6 @@
-import { Leaf, Menu } from "lucide-react";
+import { useState, useRef } from "react";
+import { Leaf, Menu, Keyboard } from "lucide-react";
+import UrduKeyboard from "../i18n/UrduKeyboard";
 
 const COLORS = {
   forest: "#1e4620",
@@ -27,12 +29,31 @@ const COLORS = {
  * rightContent controls like the language toggle) stays in a fixed
  * left-to-right order regardless of the active language, so buttons
  * don't jump position when switching to Urdu.
+ *
+ * Also renders a click-to-type Urdu keyboard toggle (always available,
+ * independent of rightContent) so anyone without a physical Urdu
+ * layout can still type Urdu into any focused text field on the page.
  */
 export default function Topbar({ showMenuButton = false, onMenuClick, rightContent }) {
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [kbPosition, setKbPosition] = useState(null);
+  const kbButtonRef = useRef(null);
+
+  function toggleKeyboard() {
+    if (!keyboardOpen && kbButtonRef.current) {
+      const rect = kbButtonRef.current.getBoundingClientRect();
+      setKbPosition({
+        x: Math.max(8, rect.right - 360),
+        y: rect.bottom + 8,
+      });
+    }
+    setKeyboardOpen((v) => !v);
+  }
+
   return (
     <header
       dir="ltr"
-      className="flex items-center justify-between px-6 py-4 border-b shrink-0"
+      className="relative flex items-center justify-between px-6 py-4 border-b shrink-0"
       style={{ backgroundColor: "white", borderColor: COLORS.greige }}
     >
       <div className="flex items-center gap-3">
@@ -56,7 +77,30 @@ export default function Topbar({ showMenuButton = false, onMenuClick, rightConte
 
       <div className="hidden md:block" />
 
-      <div className="flex items-center gap-4">{rightContent}</div>
+      <div className="flex items-center gap-4">
+        <button
+          ref={kbButtonRef}
+          type="button"
+          onClick={toggleKeyboard}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors"
+          style={{
+            borderColor: "#d9ddce",
+            color: keyboardOpen ? COLORS.forestDark : COLORS.forest,
+            backgroundColor: keyboardOpen ? COLORS.gold : "white",
+          }}
+          aria-label="Toggle Urdu keyboard"
+          title="اردو کی بورڈ"
+        >
+          <Keyboard size={14} />
+          <span className="hidden sm:inline">اردو</span>
+        </button>
+
+        {keyboardOpen && (
+          <UrduKeyboard onClose={() => setKeyboardOpen(false)} initialPosition={kbPosition} />
+        )}
+
+        {rightContent}
+      </div>
     </header>
   );
 }
