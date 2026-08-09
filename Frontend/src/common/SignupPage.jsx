@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
+import Topbar from "./Topbar";
 import { signup } from "../handlers/auth";
 
 /**
@@ -159,7 +160,7 @@ export default function SignupPage() {
   const activeRoleLabel = t(ROLES.find((r) => r.key === role).labelKey);
 
   return (
-    <div dir="ltr" className="min-h-screen w-full flex" style={{ backgroundColor: COLORS.cream }}>
+    <div className="min-h-screen w-full flex flex-col" style={{ backgroundColor: COLORS.cream }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
         .font-display { font-family: 'Fraunces', serif; }
@@ -167,6 +168,25 @@ export default function SignupPage() {
         .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; }
       `}</style>
 
+      <Topbar
+        rightContent={
+          <>
+            <LanguageSelector />
+            <button
+              onClick={() => navigate("/login")}
+              className="text-sm font-medium px-4 py-2 rounded-lg"
+              style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
+            >
+              {/* Hardcoded — signup.logIn exists but is styled as an
+                  inline text link ("Log in"), reused as-is here since
+                  it happens to already be the right short length. */}
+              {t("signup.logIn")}
+            </button>
+          </>
+        }
+      />
+
+      <div dir="ltr" className="flex-1 w-full flex">
       {/* LEFT — hero / brand panel. Matches LoginPage.jsx exactly —
           only the title/subtitle text differs (signup's own copy). */}
       <div
@@ -246,19 +266,16 @@ export default function SignupPage() {
         className="flex-1 flex items-center justify-center px-6 py-10 sm:px-10 font-body"
       >
         <div className="w-full max-w-md">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2
-                className={`text-3xl mb-1 ${isRTL ? "font-urdu" : "font-display"}`}
-                style={{ color: COLORS.ink }}
-              >
-                {t("signup.createAccount")}
-              </h2>
-              <p className="text-sm" style={{ color: COLORS.sub }}>
-                {t("signup.subtitle")}
-              </p>
-            </div>
-            <LanguageSelector />
+          <div className="mb-8">
+            <h2
+              className={`text-3xl mb-1 ${isRTL ? "font-urdu" : "font-display"}`}
+              style={{ color: COLORS.ink }}
+            >
+              {t("signup.createAccount")}
+            </h2>
+            <p className="text-sm" style={{ color: COLORS.sub }}>
+              {t("signup.subtitle")}
+            </p>
           </div>
 
           {/* Role tabs — same pattern as LoginPage.jsx */}
@@ -423,6 +440,7 @@ export default function SignupPage() {
             </Link>
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

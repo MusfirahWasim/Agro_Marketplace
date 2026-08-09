@@ -68,6 +68,7 @@ export const translations = {
       signInAs: "Sign in as {{role}}",
       newToAisamms: "New to AISAMMS?",
       contactAdmin: "Sign up to AISAMMS",
+      signUp: "Sign up",
       hero: {
         title: "From farm gate to market crate",
         subtitle:
@@ -793,6 +794,7 @@ export const translations = {
       signInAs: "بطور {{role}} سائن ان کریں",
       newToAisamms: "AISAMMS پر نئے ہیں؟",
       contactAdmin: "AISAMMS میں سائن اپ کریں",
+      signUp: "سائن اپ",
       hero: {
         title: "کھیت سے منڈی تک",
         subtitle:
