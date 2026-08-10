@@ -17,6 +17,7 @@ import {
   Percent,
   Landmark,
   Sparkles,
+  Wallet,
 } from "lucide-react";
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
@@ -39,6 +40,9 @@ const NAV_CONFIG = {
     links: [
       { to: "/supplier/dashboard", labelKey: "common.nav.dashboard", icon: LayoutDashboard },
       { to: "/supplier/supplies", labelKey: "common.nav.mySupplies", icon: Sprout },
+      { to: "/supplier/consignments", labelKey: "common.nav.consignments", icon: Truck },
+      { to: "/supplier/payments", labelKey: "common.nav.payments", icon: Wallet },
+      { to: "/supplier/reports", labelKey: "common.nav.reports", icon: Sparkles },
       { to: "/supplier/profile", labelKey: "common.nav.profile", icon: User },
     ],
   },

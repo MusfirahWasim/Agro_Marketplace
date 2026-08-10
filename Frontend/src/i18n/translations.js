@@ -21,6 +21,9 @@ export const translations = {
         settlements: "Settlements",
         priceInsights: "Price Insights",
         marketplace: "Marketplace",
+        consignments: "Consignment",
+        payments: "Payment",
+        reports: "Reports",
       },
       roles: {
         supplier: "Supplier",
@@ -746,6 +749,9 @@ export const translations = {
         settlements: "سیٹلمنٹس",
         priceInsights: "قیمت بصیرت",
         marketplace: "مارکیٹ پلیس",
+        consignments: "کھیپ",
+        payments: "ادائیگی",
+        reports: "رپورٹس",
       },
       roles: {
         supplier: "سپلائر",
