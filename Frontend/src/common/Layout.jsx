@@ -22,6 +22,7 @@ import {
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
 import { getMyProfile } from "../handlers/party";
+import Topbar from "./Topbar";
 
 const COLORS = {
   forest: "#1e4620",
@@ -175,56 +176,38 @@ export default function Layout({ role }) {
       {/* main column */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* topbar */}
-        <header
-          className="flex items-center justify-between px-6 py-4 border-b shrink-0"
-          style={{ backgroundColor: "white", borderColor: COLORS.greige }}
-        >
-          <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen((v) => !v)}>
-              <Menu size={22} color={COLORS.forest} />
-            </button>
-            <div className="md:hidden flex items-center gap-2">
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: COLORS.forest }}
-              >
-                <Leaf size={14} color={COLORS.gold} />
+        <Topbar
+          showMenuButton
+          onMenuClick={() => setSidebarOpen((v) => !v)}
+          rightContent={
+            <>
+              <LanguageSelector />
+              <button className="relative">
+                <Bell size={19} color={COLORS.sub} />
+                <span
+                  className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                  style={{ backgroundColor: COLORS.gold }}
+                />
+              </button>
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium"
+                  style={{ backgroundColor: COLORS.greige, color: COLORS.forest }}
+                >
+                  {initials}
+                </div>
+                <div className="hidden sm:block leading-tight">
+                  <p className="text-sm font-medium" style={{ color: COLORS.ink }}>
+                    {displayName}
+                  </p>
+                  <p className="text-xs" style={{ color: COLORS.sub }}>
+                    {t(config.subtitleKey)}
+                  </p>
+                </div>
               </div>
-              <span className="font-display text-base" style={{ color: COLORS.forest }}>
-                AISAMMS
-              </span>
-            </div>
-          </div>
-
-          <div className="hidden md:block" />
-
-          <div className="flex items-center gap-4">
-            <LanguageSelector />
-            <button className="relative">
-              <Bell size={19} color={COLORS.sub} />
-              <span
-                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-                style={{ backgroundColor: COLORS.gold }}
-              />
-            </button>
-            <div className="flex items-center gap-2.5">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium"
-                style={{ backgroundColor: COLORS.greige, color: COLORS.forest }}
-              >
-                {initials}
-              </div>
-              <div className="hidden sm:block leading-tight">
-                <p className="text-sm font-medium" style={{ color: COLORS.ink }}>
-                  {displayName}
-                </p>
-                <p className="text-xs" style={{ color: COLORS.sub }}>
-                  {t(config.subtitleKey)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </header>
+            </>
+          }
+        />
 
         {/* page content */}
         <main className="flex-1 overflow-y-auto p-6 sm:p-8">

@@ -64,7 +64,7 @@ function normalizeCommission(raw) {
     rate: raw.commission_rate,
     commissionAmount: raw.commission_amount,
     payoutStatus: raw.payout_status, // "pending" | "paid" | "reversed"
-    date: raw.created_at ?? raw.date ?? null,
+    date: raw.consigned_at ?? raw.date ?? null,
   };
 }
 

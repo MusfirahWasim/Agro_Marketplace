@@ -3,6 +3,7 @@ import { Leaf, Mail, Lock, Eye, EyeOff, ArrowRight, Wheat, Loader2 } from "lucid
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
+import Topbar from "./Topbar";
 import { login, logout } from "../handlers/auth";
 
 const ROLES = [
@@ -97,14 +98,7 @@ export default function LoginPage() {
   const activeRoleLabel = t(ROLES.find((r) => r.key === role)?.labelKey);
 
   return (
-    // dir="ltr" is forced here so the two-column layout never reverses —
-    // even though <html> gets dir="rtl" globally when Urdu is active,
-    // this local override keeps the branding panel pinned left always.
-    <div
-      dir="ltr"
-      className="min-h-screen w-full flex"
-      style={{ backgroundColor: COLORS.cream }}
-    >
+    <div className="min-h-screen w-full flex flex-col" style={{ backgroundColor: COLORS.cream }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
         .font-display { font-family: 'Fraunces', serif; }
@@ -112,6 +106,25 @@ export default function LoginPage() {
         .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; }
       `}</style>
 
+      <Topbar
+        rightContent={
+          <>
+            <LanguageSelector />
+            <button
+              onClick={() => navigate("/signup")}
+              className="text-sm font-medium px-4 py-2 rounded-lg"
+              style={{ backgroundColor: COLORS.gold, color: COLORS.forestDark }}
+            >
+              {t("login.signUp")}
+            </button>
+          </>
+        }
+      />
+
+      {/* dir="ltr" is forced here so the two-column layout never reverses —
+          even though <html> gets dir="rtl" globally when Urdu is active,
+          this local override keeps the branding panel pinned left always. */}
+      <div dir="ltr" className="flex-1 w-full flex">
       {/* LEFT — hero / brand panel. Position, layout, image, and stats
           never change. Only the text content swaps language. */}
       <div
@@ -193,23 +206,6 @@ export default function LoginPage() {
         className="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-12 py-12 font-body"
       >
         <div className="w-full max-w-sm">
-          <div className="flex items-center justify-between mb-6 lg:mb-10">
-            <div className="lg:hidden flex items-center gap-2">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: COLORS.forest }}
-              >
-                <Leaf size={16} color={COLORS.gold} />
-              </div>
-              <span className="font-display text-xl" style={{ color: COLORS.forest }}>
-                AISAMMS
-              </span>
-            </div>
-            <div className={isRTL ? "mr-auto" : "ml-auto"}>
-              <LanguageSelector />
-            </div>
-          </div>
-
           <h2
             className={`text-3xl mb-1 ${isRTL ? "font-urdu" : "font-display"}`}
             style={{ color: COLORS.ink }}
@@ -363,6 +359,7 @@ export default function LoginPage() {
             </a>
           </p>
         </div>
+      </div>
       </div>
     </div>
   );
