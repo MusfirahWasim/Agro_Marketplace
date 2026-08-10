@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
-import { localizeTrader } from "../i18n/dataLocale";
+import { listMyConsignmentHistory } from "../handlers/consignment";
 import {
   Search,
   SlidersHorizontal,
@@ -11,135 +11,115 @@ import {
   ChevronDown,
   Inbox,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 /**
  * SupplierConsignments
  * History of handovers from this supplier to commission agents
- * (i.e. rows from `supplier_agent_consignment` scoped to the logged-in supplier).
+ * (GET /api/consignments/supplier/me — ConsignmentRead[], scoped server-side
+ * to the logged-in supplier). Read-only: suppliers view history here, they
+ * don't act on it (creation/status transitions belong to the agent).
  *
  * Matches the Modern Organic & Eco-Friendly theme:
  * - Off-white page background, forest-green accents, gold highlights
  * - Stat cards, searchable/filterable table, status pills
- * Fully localized (English / Urdu) via LanguageContext, including agent
- * company names, product names, and dates.
+ * Fully localized (English / Urdu) via LanguageContext.
  */
 
-// TODO: replace with real data from GET /suppliers/:id/consignments
-const MOCK_CONSIGNMENTS = [
-  {
-    id: "CSN-1042",
-    date: "2026-07-14",
-    agent: "Al-Barakah Commission House",
-    product: "Basmati Rice",
-    productKey: "basmatiRice",
-    grade: "A",
-    quantity: 500,
-    unit: "kg",
-    quantitySold: 500,
-    quantityRemaining: 0,
-    status: "completed",
-  },
-  {
-    id: "CSN-1041",
-    date: "2026-07-12",
-    agent: "Zarai Traders",
-    product: "Red Onion",
-    productKey: "redOnion",
-    grade: "B",
-    quantity: 1200,
-    unit: "kg",
-    quantitySold: 640,
-    quantityRemaining: 560,
-    status: "active",
-  },
-  {
-    id: "CSN-1039",
-    date: "2026-07-09",
-    agent: "Al-Barakah Commission House",
-    product: "Wheat",
-    productKey: "wheat",
-    grade: "A",
-    quantity: 2000,
-    unit: "kg",
-    quantitySold: 0,
-    quantityRemaining: 2000,
-    status: "pending",
-  },
-  {
-    id: "CSN-1035",
-    date: "2026-07-03",
-    agent: "Green Valley Agents",
-    product: "Tomato",
-    productKey: "tomato",
-    grade: "A",
-    quantity: 300,
-    unit: "kg",
-    quantitySold: 180,
-    quantityRemaining: 120,
-    status: "active",
-  },
-  {
-    id: "CSN-1028",
-    date: "2026-06-27",
-    agent: "Zarai Traders",
-    product: "Potato",
-    productKey: "potato",
-    grade: "C",
-    quantity: 900,
-    unit: "kg",
-    quantitySold: 900,
-    quantityRemaining: 0,
-    status: "completed",
-  },
-];
-
+// Real ConsignmentStatus from the backend is pending | confirmed | completed | cancelled.
+// The old "active" status was fabricated — there's no such state — and "confirmed"
+// (pending -> confirmed, i.e. the agent has taken it live on the marketplace) was
+// missing entirely. Rebuilt against the real enum.
 const STATUS_STYLES = {
-  active: "bg-[#3f8f43]/10 text-[#2f7d32] border-[#3f8f43]/30",
-  completed: "bg-[#1e4620]/10 text-[#1e4620] border-[#1e4620]/20",
   pending: "bg-[#f0b84c]/20 text-[#8a5a12] border-[#f0b84c]/40",
+  confirmed: "bg-[#3f8f43]/10 text-[#2f7d32] border-[#3f8f43]/30",
+  completed: "bg-[#1e4620]/10 text-[#1e4620] border-[#1e4620]/20",
+  cancelled: "bg-[#b5544a]/10 text-[#b5544a] border-[#b5544a]/30",
 };
 
+// NOTE: "supplier.status.confirmed" and "supplier.status.cancelled" are new
+// keys this status set needs — they didn't exist for the old "active"/no-cancel
+// mock. translations.js is out of scope for me to edit, so these need to be
+// added there (English + Urdu) or the pill will render the raw key.
 const STATUS_LABEL = {
-  active: "supplier.status.active",
-  completed: "supplier.status.completed",
   pending: "supplier.status.awaitingAgent",
+  confirmed: "supplier.status.confirmed",
+  completed: "supplier.status.completed",
+  cancelled: "supplier.status.cancelled",
 };
 
 export default function SupplierConsignments() {
   const { t, formatDate, language } = useLanguage();
   const isUr = language === "ur";
-  const unit = isUr ? "کلوگرام" : "kg";
-  const trader = (name) => localizeTrader(name, language);
-  const [loading] = useState(false);
+
+  const [consignments, setConsignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const consignments = MOCK_CONSIGNMENTS;
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      const { data, error: fetchError } = await listMyConsignmentHistory();
+      if (cancelled) return;
+      if (fetchError) {
+        setError(fetchError);
+      } else {
+        setConsignments(data ?? []);
+      }
+      setLoading(false);
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
     return consignments.filter((c) => {
       const matchesQuery =
-        query.trim() === "" ||
-        c.product.toLowerCase().includes(query.toLowerCase()) ||
-        c.agent.toLowerCase().includes(query.toLowerCase()) ||
-        trader(c.agent).includes(query) ||
-        c.id.toLowerCase().includes(query.toLowerCase());
+        q === "" ||
+        (c.item_name ?? "").toLowerCase().includes(q) ||
+        (c.agent_name ?? "").toLowerCase().includes(q) ||
+        String(c.consigned_id).includes(q);
       const matchesStatus = statusFilter === "all" || c.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
-  }, [consignments, query, statusFilter, language]);
+  }, [consignments, query, statusFilter]);
 
+  // Consignments can carry different units (kg/bag/crate/dozen/ton/maund
+  // per ConsignmentRead.unit), so a single summed number across all rows
+  // isn't meaningful — grouping by unit instead of the old fixed-kg total.
   const stats = useMemo(() => {
     const totalConsignments = consignments.length;
-    const activeAgents = new Set(consignments.map((c) => c.agent)).size;
-    const totalQuantity = consignments.reduce((sum, c) => sum + c.quantity, 0);
-    const totalRemaining = consignments.reduce(
-      (sum, c) => sum + c.quantityRemaining,
-      0
-    );
-    return { totalConsignments, activeAgents, totalQuantity, totalRemaining };
+    const activeAgents = new Set(consignments.map((c) => c.agent_id)).size;
+
+    const byUnit = (key) =>
+      consignments.reduce((acc, c) => {
+        acc[c.unit] = (acc[c.unit] || 0) + (c[key] ?? 0);
+        return acc;
+      }, {});
+
+    return {
+      totalConsignments,
+      activeAgents,
+      consignedByUnit: byUnit("quantity_consigned"),
+      remainingByUnit: byUnit("quantity_remaining"),
+    };
   }, [consignments]);
+
+  const formatByUnit = (byUnit) => {
+    const entries = Object.entries(byUnit);
+    if (entries.length === 0) return "0";
+    return entries.map(([unit, qty]) => `${qty.toLocaleString()} ${unit}`).join(", ");
+  };
 
   return (
     <div className="min-h-full bg-[#faf9f5] px-6 py-8 sm:px-8" dir={isUr ? "rtl" : "ltr"} style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : undefined }}>
@@ -171,12 +151,12 @@ export default function SupplierConsignments() {
         <StatCard
           icon={<Scale className="h-5 w-5" />}
           label={t("supplier.consignments.totalQuantityConsigned")}
-          value={`${stats.totalQuantity.toLocaleString()} ${unit}`}
+          value={formatByUnit(stats.consignedByUnit)}
         />
         <StatCard
           icon={<Wallet className="h-5 w-5" />}
           label={t("supplier.consignments.stillWithAgents")}
-          value={`${stats.totalRemaining.toLocaleString()} ${unit}`}
+          value={formatByUnit(stats.remainingByUnit)}
           accent
         />
       </div>
@@ -204,8 +184,9 @@ export default function SupplierConsignments() {
             >
               <option value="all">{t("supplier.filters.allStatuses")}</option>
               <option value="pending">{t("supplier.status.awaitingAgent")}</option>
-              <option value="active">{t("supplier.status.active")}</option>
+              <option value="confirmed">{t("supplier.status.confirmed")}</option>
               <option value="completed">{t("supplier.status.completed")}</option>
+              <option value="cancelled">{t("supplier.status.cancelled")}</option>
             </select>
             <ChevronDown className="h-3.5 w-3.5 text-gray-400 -ml-6 pointer-events-none" />
           </div>
@@ -218,6 +199,11 @@ export default function SupplierConsignments() {
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
             <Loader2 className="h-6 w-6 animate-spin" />
             <span className="text-sm">{t("supplier.common.loadingConsignments")}</span>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-20 text-[#b5544a]">
+            <AlertCircle className="h-8 w-8" />
+            <p className="text-sm">{error}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
@@ -242,32 +228,36 @@ export default function SupplierConsignments() {
               <tbody className="divide-y divide-gray-100">
                 {filtered.map((c) => (
                   <tr
-                    key={c.id}
+                    key={c.consigned_id}
                     className="hover:bg-[#faf9f5] transition-colors"
                   >
-                    <Td className="font-medium text-[#1e4620]">{c.id}</Td>
+                    {/* Raw integer PK — no CSN-xxxx prefix. The friendly-ID-vs-
+                        raw-integer question is still an open decision across all
+                        screens (flagged separately); showing the real value here
+                        rather than inventing a prefix convention unilaterally. */}
+                    <Td className="font-medium text-[#1e4620]">{c.consigned_id}</Td>
                     <Td className="text-gray-500">
-                      {formatDate(c.date)}
+                      {formatDate(c.consigned_at)}
                     </Td>
-                    <Td>{trader(c.agent)}</Td>
+                    <Td>{c.agent_name ?? "—"}</Td>
                     <Td>
                       <div className="flex items-center gap-2">
-                        <span>
-                          {c.productKey ? t(`common.produce.${c.productKey}`) : c.product}
-                        </span>
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f0b84c]/20 text-[#8a5a12]">
-                          {t("supplier.common.grade")} {c.grade}
-                        </span>
+                        <span>{c.item_name}</span>
+                        {c.category && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f0b84c]/20 text-[#8a5a12]">
+                            {c.category}
+                          </span>
+                        )}
                       </div>
                     </Td>
                     <Td className="text-right">
-                      {c.quantity.toLocaleString()} {unit}
+                      {c.quantity_consigned.toLocaleString()} {c.unit}
                     </Td>
                     <Td className="text-right">
-                      {c.quantitySold.toLocaleString()} {unit}
+                      {c.quantity_sold.toLocaleString()} {c.unit}
                     </Td>
                     <Td className="text-right font-medium">
-                      {c.quantityRemaining.toLocaleString()} {unit}
+                      {c.quantity_remaining.toLocaleString()} {c.unit}
                     </Td>
                     <Td>
                       <span

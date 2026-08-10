@@ -1,32 +1,43 @@
-import { useState } from "react";
-import {
-  X,
-  Package,
-  Scale,
-  Tag,
-  Banknote,
-  CalendarDays,
-  ImagePlus,
-  Trash2,
-  Sprout,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Package, Scale, Tag, Banknote, Sprout } from "lucide-react";
 import { useLanguage } from "../i18n/LanguageContext";
 
 /**
  * SupplierAddSupplyModal
  * Matches the Modern Organic & Eco-Friendly theme (LoginPage / SignupPage):
  * - Forest green header strip, gold primary CTA, off-white body, rounded-2xl card
- * - Used to add a new entry to the supplier's `supplies` table (available stock)
- * Fully localized (English / Urdu) via LanguageContext — every label, option,
- * and error message comes from translation keys, and the dialog switches to
- * RTL layout + Urdu font automatically.
+ * - Used to add OR edit an entry in the supplier's `supplies` table
+ * Fully localized (English / Urdu) via LanguageContext.
  *
  * Props:
  *  - open: boolean — whether the modal is visible
  *  - onClose: () => void — called on cancel / backdrop click / X button
- *  - onSubmit: (supply) => Promise<void> | void — called with the new supply payload
+ *  - editingSupply: SupplyRead | null — pass a supply object to pre-fill
+ *    the form in edit mode (title/button switch to "Save changes"); pass
+ *    null/omit for add mode. This modal doesn't call the update/create
+ *    endpoint itself — the parent's onSubmit decides which based on
+ *    whatever it's tracking (e.g. its own editingId state), since the
+ *    payload shape is identical for both.
+ *  - onSubmit: (payload) => Promise<void> | void — called with a payload
+ *    shaped EXACTLY like SupplyCreate/SupplyUpdate: { item_name, category,
+ *    unit, current_stock, cost_per_unit, description }. This modal builds
+ *    that shape directly so the parent can pass it straight to
+ *    createSupply()/updateSupply() with no remapping.
+ *    NOTE: this component's error handling assumes onSubmit throws/rejects
+ *    on failure. If the parent calls createSupply()/updateSupply() (which
+ *    return {data, error} rather than throwing per request()'s
+ *    convention), the parent's onSubmit must check `error` and throw
+ *    itself, or a failed save will look like a success here.
  */
 
+// NOTE: values here are UI translation keys for the label only. The
+// values actually sent to the backend are canonical English strings
+// (see CATEGORY_VALUES) since `category` is a free-text column, not an
+// enum, and BuyerMarketplace's filter pills are built from whatever
+// distinct strings suppliers actually save — inconsistent casing/keys
+// across supplier-facing forms would fragment that filter. Flagging
+// this mapping as an assumption: if another supplier screen also
+// writes `category`, it needs to agree on the same canonical strings.
 const CATEGORY_KEYS = [
   "vegetables",
   "fruits",
@@ -37,33 +48,62 @@ const CATEGORY_KEYS = [
   "other",
 ];
 
-const UNIT_KEYS = ["kg", "quintal", "ton", "crate", "bag", "dozen"];
-
-const GRADES = [
-  { value: "A", key: "a" },
-  { value: "B", key: "b" },
-  { value: "C", key: "c" },
-];
-
-const initialForm = {
-  productName: "",
-  category: CATEGORY_KEYS[0],
-  quantity: "",
-  unit: UNIT_KEYS[0],
-  pricePerUnit: "",
-  grade: "A",
-  harvestDate: "",
-  notes: "",
+const CATEGORY_VALUES = {
+  vegetables: "Vegetables",
+  fruits: "Fruits",
+  grainsCereals: "Grains & Cereals",
+  pulses: "Pulses",
+  spices: "Spices",
+  dairy: "Dairy",
+  other: "Other",
 };
 
-export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
+// Matches UnitType exactly: kg | bag | crate | dozen | ton | maund.
+// The old list had "quintal" (not a real unit — would 422 on submit)
+// and was missing "maund" entirely.
+// NOTE: "supplier.addSupplyModal.units.maund" is a new translation key
+// this needs — translations.js is out of scope for me to edit here.
+const UNIT_KEYS = ["kg", "bag", "crate", "dozen", "ton", "maund"];
+
+const initialForm = {
+  item_name: "",
+  category: CATEGORY_KEYS[0],
+  current_stock: "",
+  unit: UNIT_KEYS[0],
+  cost_per_unit: "",
+  description: "",
+};
+
+export default function SupplierAddSupplyModal({ open, onClose, onSubmit, editingSupply = null }) {
   const { t, language } = useLanguage();
   const isUr = language === "ur";
   const [form, setForm] = useState(initialForm);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    if (editingSupply) {
+      // Reverse-map the stored canonical category string back to a UI
+      // key. If it doesn't match any known value (e.g. data written by
+      // something other than this modal), fall back to the first option
+      // rather than silently losing the original value on save.
+      const matchedKey =
+        CATEGORY_KEYS.find((k) => CATEGORY_VALUES[k] === editingSupply.category) ??
+        CATEGORY_KEYS[0];
+      setForm({
+        item_name: editingSupply.item_name ?? "",
+        category: matchedKey,
+        current_stock: String(editingSupply.current_stock ?? ""),
+        unit: editingSupply.unit ?? UNIT_KEYS[0],
+        cost_per_unit: String(editingSupply.cost_per_unit ?? ""),
+        description: editingSupply.description ?? "",
+      });
+    } else {
+      setForm(initialForm);
+    }
+  }, [open, editingSupply]);
 
   if (!open) return null;
 
@@ -71,22 +111,8 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleImageChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  }
-
-  function removeImage() {
-    setImageFile(null);
-    setImagePreview(null);
-  }
-
   function resetAndClose() {
     setForm(initialForm);
-    setImageFile(null);
-    setImagePreview(null);
     setError("");
     onClose?.();
   }
@@ -95,15 +121,15 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
     e.preventDefault();
     setError("");
 
-    if (!form.productName || !form.quantity || !form.pricePerUnit) {
+    if (!form.item_name || !form.current_stock || !form.cost_per_unit) {
       setError(t("supplier.addSupplyModal.errors.required"));
       return;
     }
-    if (Number(form.quantity) <= 0) {
+    if (!Number.isInteger(Number(form.current_stock)) || Number(form.current_stock) < 0) {
       setError(t("supplier.addSupplyModal.errors.quantity"));
       return;
     }
-    if (Number(form.pricePerUnit) <= 0) {
+    if (Number(form.cost_per_unit) <= 0) {
       setError(t("supplier.addSupplyModal.errors.price"));
       return;
     }
@@ -111,10 +137,12 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
     setSubmitting(true);
     try {
       await onSubmit?.({
-        ...form,
-        quantity: Number(form.quantity),
-        pricePerUnit: Number(form.pricePerUnit),
-        image: imageFile,
+        item_name: form.item_name,
+        category: CATEGORY_VALUES[form.category],
+        unit: form.unit,
+        current_stock: parseInt(form.current_stock, 10),
+        cost_per_unit: Number(form.cost_per_unit),
+        description: form.description || undefined,
       });
       resetAndClose();
     } catch (err) {
@@ -133,7 +161,10 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
       dir={isUr ? "rtl" : "ltr"}
       style={{ fontFamily: isUr ? "'Noto Nastaliq Urdu', serif" : undefined }}
     >
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap');
+        .font-display { font-family: 'Fraunces', serif; }
+      `}</style>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-[#1e4620]/40 backdrop-blur-[2px]"
@@ -149,8 +180,8 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
               <Sprout className="h-5 w-5" />
             </div>
             <div>
-              <h2 id="add-supply-title" className="font-serif text-xl leading-tight">
-                {t("supplier.addSupplyModal.title")}
+              <h2 id="add-supply-title" className={`text-xl leading-tight ${isUr ? "" : "font-display"}`}>
+                {editingSupply ? t("supplier.supplies.editSupply") : t("supplier.addSupplyModal.title")}
               </h2>
               <p className="text-white/70 text-xs">
                 {t("supplier.addSupplyModal.subtitle")}
@@ -173,77 +204,30 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
           onSubmit={handleSubmit}
           className="px-6 py-6 space-y-5 overflow-y-auto"
         >
-          {/* Image upload */}
-          <div>
-            <label className="block text-sm text-gray-700 mb-1.5">
-              {t("supplier.addSupplyModal.productPhoto")}
-            </label>
-            {imagePreview ? (
-              <div className="relative w-full h-36 rounded-xl overflow-hidden border border-gray-200">
-                <img
-                  src={imagePreview}
-                  alt="Supply preview"
-                  className="w-full h-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={removeImage}
-                  className="absolute top-2 right-2 h-8 w-8 rounded-full bg-white/90 flex items-center justify-center text-red-600 hover:bg-white shadow"
-                  aria-label="Remove image"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <label className="flex flex-col items-center justify-center gap-1.5 w-full h-28 rounded-xl border-2 border-dashed border-gray-300 hover:border-[#1e4620] cursor-pointer text-gray-400 hover:text-[#1e4620] transition-colors">
-                <ImagePlus className="h-6 w-6" />
-                <span className="text-xs">{t("supplier.addSupplyModal.clickToUpload")}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageChange}
-                />
-              </label>
-            )}
-          </div>
-
           {/* Product name */}
           <Field label={t("supplier.addSupplyModal.productName")} required>
             <IconInput
               icon={<Package className="h-4 w-4" />}
               type="text"
+              maxLength={50}
               placeholder={t("supplier.addSupplyModal.productNamePlaceholder")}
-              value={form.productName}
-              onChange={(v) => updateField("productName", v)}
+              value={form.item_name}
+              onChange={(v) => updateField("item_name", v)}
             />
           </Field>
 
-          {/* Category + Grade */}
-          <div className="grid grid-cols-2 gap-4">
-            <Field label={t("supplier.addSupplyModal.category")}>
-              <SelectInput
-                icon={<Tag className="h-4 w-4" />}
-                value={form.category}
-                onChange={(v) => updateField("category", v)}
-                options={CATEGORY_KEYS.map((k) => ({
-                  value: k,
-                  label: t(`common.categories.${k}`),
-                }))}
-              />
-            </Field>
-            <Field label={t("supplier.addSupplyModal.qualityGrade")}>
-              <SelectInput
-                icon={<Sprout className="h-4 w-4" />}
-                value={form.grade}
-                onChange={(v) => updateField("grade", v)}
-                options={GRADES.map((g) => ({
-                  value: g.value,
-                  label: t(`supplier.addSupplyModal.grades.${g.key}`),
-                }))}
-              />
-            </Field>
-          </div>
+          {/* Category */}
+          <Field label={t("supplier.addSupplyModal.category")}>
+            <SelectInput
+              icon={<Tag className="h-4 w-4" />}
+              value={form.category}
+              onChange={(v) => updateField("category", v)}
+              options={CATEGORY_KEYS.map((k) => ({
+                value: k,
+                label: t(`common.categories.${k}`),
+              }))}
+            />
+          </Field>
 
           {/* Quantity + Unit */}
           <div className="grid grid-cols-2 gap-4">
@@ -252,10 +236,10 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
                 icon={<Scale className="h-4 w-4" />}
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 placeholder="0"
-                value={form.quantity}
-                onChange={(v) => updateField("quantity", v)}
+                value={form.current_stock}
+                onChange={(v) => updateField("current_stock", v)}
               />
             </Field>
             <Field label={t("supplier.addSupplyModal.unit")}>
@@ -270,36 +254,27 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
             </Field>
           </div>
 
-          {/* Price per unit + Harvest date */}
-          <div className="grid grid-cols-2 gap-4">
-            <Field label={t("supplier.addSupplyModal.pricePerUnit")} required>
-              <IconInput
-                icon={<Banknote className="h-4 w-4" />}
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={form.pricePerUnit}
-                onChange={(v) => updateField("pricePerUnit", v)}
-              />
-            </Field>
-            <Field label={t("supplier.addSupplyModal.harvestDate")}>
-              <IconInput
-                icon={<CalendarDays className="h-4 w-4" />}
-                type="date"
-                value={form.harvestDate}
-                onChange={(v) => updateField("harvestDate", v)}
-              />
-            </Field>
-          </div>
+          {/* Price per unit */}
+          <Field label={t("supplier.addSupplyModal.pricePerUnit")} required>
+            <IconInput
+              icon={<Banknote className="h-4 w-4" />}
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={form.cost_per_unit}
+              onChange={(v) => updateField("cost_per_unit", v)}
+            />
+          </Field>
 
-          {/* Notes */}
+          {/* Description */}
           <Field label={t("supplier.addSupplyModal.notes")}>
             <textarea
               rows={3}
+              maxLength={200}
               placeholder={t("supplier.addSupplyModal.notesPlaceholder")}
-              value={form.notes}
-              onChange={(e) => updateField("notes", e.target.value)}
+              value={form.description}
+              onChange={(e) => updateField("description", e.target.value)}
               className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-[#1e4620] focus:ring-2 focus:ring-[#1e4620]/10 transition-shadow resize-none"
             />
           </Field>
@@ -327,7 +302,11 @@ export default function SupplierAddSupplyModal({ open, onClose, onSubmit }) {
             disabled={submitting}
             className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#f0b84c] hover:bg-[#e8ab30] disabled:opacity-60 disabled:cursor-not-allowed text-[#1e4620] transition-colors"
           >
-            {submitting ? t("supplier.addSupplyModal.adding") : t("supplier.addSupplyModal.addSupply")}
+            {submitting
+              ? t("supplier.addSupplyModal.adding")
+              : editingSupply
+              ? t("supplier.supplies.saveChanges")
+              : t("supplier.addSupplyModal.addSupply")}
           </button>
         </div>
       </div>
