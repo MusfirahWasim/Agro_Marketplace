@@ -1,61 +1,63 @@
-from sqlalchemy import Column, DECIMAL, String, Date, ForeignKey
-from sqlalchemy.dialects.mysql import INTEGER, ENUM
+from sqlalchemy import Column, String, DECIMAL, TIMESTAMP, ForeignKey, func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.mysql import INTEGER, BIGINT, ENUM
 from app.core.database import Base
 
 
 class Payment(Base):
     """
-    Maps to `payments`. Covers all three payment flows through a single
-    payer/payee pair: buyer-to-agent, agent-to-supplier settlements, and
-    refunds — the direction is determined by payer_type/payee_type, not
-    by a separate table per flow.
+    Maps to the `payments` table. Unlike v1's Payment (generic
+    payer/payee pair), this ties to a single account_id — direction
+    is implied by whether that account belongs to a buyer or a
+    supplier, not stored explicitly here. agent_id records who
+    physically handled it; created_by records who logged it in the
+    system (normally the same agent).
     """
 
     __tablename__ = "payments"
 
-    payment_id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
+    payment_id = Column(BIGINT(unsigned=True), primary_key=True, autoincrement=True)
 
-    payer_id = Column(
+    account_id = Column(
         INTEGER(unsigned=True),
-        ForeignKey("parties.party_id"),
+        ForeignKey("accounts.account_id", ondelete="RESTRICT"),
         nullable=False,
     )
-    payer_type = Column(ENUM("S", "B", "CA"), nullable=False)
-
-    payee_id = Column(
+    agent_id = Column(
         INTEGER(unsigned=True),
-        ForeignKey("parties.party_id"),
+        ForeignKey("commission_agents.agent_id", ondelete="RESTRICT"),
         nullable=False,
-    )
-    payee_type = Column(ENUM("S", "B", "CA"), nullable=False)
-
-    payment_method = Column(ENUM("cash", "card", "other"), nullable=False)
-
-    order_id = Column(
-        INTEGER(unsigned=True),
-        ForeignKey("orders.order_id"),
-        nullable=True,
     )
 
     amount_paid = Column(DECIMAL(12, 2), nullable=False)
+
+    payment_method = Column(
+        ENUM("cash", "bank_transfer", "card", "other"),
+        nullable=False,
+        server_default="cash",
+    )
+
     transaction_reference = Column(String(100), nullable=True)
 
-    payment_date = Column(Date, nullable=False)
+    payment_date = Column(TIMESTAMP, server_default=func.current_timestamp())
 
-    payer = relationship(
-        "Party",
-        foreign_keys=[payer_id],
-        backref="payments_made",
+    notes = Column(String(255), nullable=True)
+
+    created_by = Column(
+        INTEGER(unsigned=True),
+        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        nullable=False,
     )
 
-    payee = relationship(
-        "Party",
-        foreign_keys=[payee_id],
-        backref="payments_received",
+    account = relationship("Account")
+    agent = relationship("CommissionAgent", back_populates="payments")
+    creator = relationship("User")
+    receipt = relationship(
+        "Receipt",
+        back_populates="payment",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
-
-    order = relationship("Order", backref="payments")
 
     def __repr__(self):
         return f"<Payment payment_id={self.payment_id} amount_paid={self.amount_paid}>"

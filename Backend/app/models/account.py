@@ -1,79 +1,61 @@
-from sqlalchemy import Column, DECIMAL, String, TIMESTAMP, ForeignKey, func
-from sqlalchemy.dialects.mysql import INTEGER, ENUM
+from sqlalchemy import Column, DECIMAL, TIMESTAMP, ForeignKey, CheckConstraint, func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.mysql import INTEGER
 from app.core.database import Base
 
 
 class Account(Base):
     """
-    Maps to `accounts` — the double-entry ledger. Every payment, refund,
-    and commission gets one row here per affected party, with a running
-    balance. This is the single source of truth for "what does party X
-    currently owe / get owed" — nothing else in the schema should be
-    used to answer that question directly.
+    Maps to the `accounts` table — a thin header row, one per buyer,
+    supplier, OR agent (exactly one of the three FKs is set; enforced
+    at the DB level by chk_account_owner, mirrored here for ORM-level
+    clarity/validation).
+
+    current_balance is NOT a column — account_service.py computes it
+    as opening_balance plus the net of this account's `transactions`
+    rows.
     """
 
     __tablename__ = "accounts"
 
     account_id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
 
-    party_id = Column(
+    buyer_id = Column(
         INTEGER(unsigned=True),
-        ForeignKey("parties.party_id"),
-        nullable=False,
+        ForeignKey("buyers.buyer_id", ondelete="RESTRICT"),
+        unique=True,
+        nullable=True,
     )
-
-    party_type = Column(
-        ENUM("S", "B", "CA"),
-        nullable=False,
-    )
-
-    transaction_type = Column(
-        ENUM("payment", "refund", "commission"),
-        nullable=False,
-    )
-
-    description = Column(String(255), nullable=True)
-
-    debit_amount = Column(DECIMAL(12, 2), server_default="0")
-    credit_amount = Column(DECIMAL(12, 2), server_default="0")
-    running_balance = Column(DECIMAL(12, 2), server_default="0")
-
-    payment_id = Column(
+    supplier_id = Column(
         INTEGER(unsigned=True),
-        ForeignKey("payments.payment_id"),
+        ForeignKey("suppliers.supplier_id", ondelete="RESTRICT"),
+        unique=True,
+        nullable=True,
+    )
+    agent_id = Column(
+        INTEGER(unsigned=True),
+        ForeignKey("commission_agents.agent_id", ondelete="RESTRICT"),
+        unique=True,
         nullable=True,
     )
 
-    order_id = Column(
-        INTEGER(unsigned=True),
-        ForeignKey("orders.order_id"),
-        nullable=True,
-    )
+    opening_balance = Column(DECIMAL(12, 2), nullable=False, server_default="0.00")
 
-    created_at = Column(
-        TIMESTAMP,
-        server_default=func.current_timestamp(),
-    )
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
-    party = relationship(
-        "Party",
-        foreign_keys=[party_id],
-        backref="ledger_entries",
-    )
+    buyer = relationship("Buyer", back_populates="account")
+    supplier = relationship("Supplier", back_populates="account")
+    agent = relationship("CommissionAgent", back_populates="account")
+    transactions = relationship("Transaction", back_populates="account")
 
-    payment = relationship(
-        "Payment",
-        backref="ledger_entries",
-    )
-
-    order = relationship(
-        "Order",
-        backref="ledger_entries",
+    __table_args__ = (
+        CheckConstraint(
+            "(buyer_id IS NOT NULL AND supplier_id IS NULL AND agent_id IS NULL) OR "
+            "(buyer_id IS NULL AND supplier_id IS NOT NULL AND agent_id IS NULL) OR "
+            "(buyer_id IS NULL AND supplier_id IS NULL AND agent_id IS NOT NULL)",
+            name="chk_account_owner",
+        ),
     )
 
     def __repr__(self):
-        return (
-            f"<Account account_id={self.account_id} "
-            f"transaction_type={self.transaction_type}>"
-        )
+        return f"<Account account_id={self.account_id}>"

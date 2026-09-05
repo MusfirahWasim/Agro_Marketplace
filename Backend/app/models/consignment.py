@@ -1,89 +1,61 @@
 from sqlalchemy import Column, DECIMAL, TIMESTAMP, ForeignKey, func
-from sqlalchemy.dialects.mysql import INTEGER, ENUM
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.mysql import INTEGER, ENUM
 from app.core.database import Base
 
 
 class Consignment(Base):
     """
-    Maps to `supplier_agent_consignment` — the hand-off point where a
-    supplier's stock is transferred to an agent's managed inventory.
+    Maps to the `consignments` table — stock a supplier has handed to
+    the agent for selling, at an agent-set price and commission rate.
+    quantity_remaining is NOT a column here (derive, don't store —
+    same principle used throughout v2): compute as
+    quantity_consigned - quantity_sold in the service layer.
     """
 
-    __tablename__ = "supplier_agent_consignment"
+    __tablename__ = "consignments"
 
-    consigned_id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
+    consignment_id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
 
-    supply_id = Column(
+    supplier_supply_id = Column(
         INTEGER(unsigned=True),
-        ForeignKey("supplies.supply_id"),
+        ForeignKey("supplier_supplies.supplier_supply_id", ondelete="RESTRICT"),
         nullable=False,
     )
-
     supplier_id = Column(
         INTEGER(unsigned=True),
-        ForeignKey("parties.party_id"),
+        ForeignKey("suppliers.supplier_id", ondelete="RESTRICT"),
         nullable=False,
     )
-    supplier_type = Column(
-        ENUM("S"),
-        nullable=False,
-        server_default="S",
-    )
-
     agent_id = Column(
         INTEGER(unsigned=True),
-        ForeignKey("parties.party_id"),
+        ForeignKey("commission_agents.agent_id", ondelete="RESTRICT"),
         nullable=False,
-    )
-    agent_type = Column(
-        ENUM("CA"),
-        nullable=False,
-        server_default="CA",
     )
 
-    payment_term = Column(
-        ENUM("cash", "credit"),
-        nullable=False,
-        server_default="credit",
-    )
+    quantity_consigned = Column(DECIMAL(12, 3), nullable=False)
+    quantity_sold = Column(DECIMAL(12, 3), nullable=False, server_default="0.000")
 
-    quantity_consigned = Column(INTEGER(unsigned=True), nullable=False)
-    selling_price_per_unit = Column(DECIMAL(10, 2), nullable=False)
-    commission_rate = Column(DECIMAL(5, 2), nullable=True)
-    quantity_sold = Column(
-        INTEGER(unsigned=True),
-        nullable=False,
-        server_default="0",
-    )
-    quantity_remaining = Column(INTEGER(unsigned=True), nullable=False)
+    selling_price_per_unit = Column(DECIMAL(12, 2), nullable=False)
+    commission_rate = Column(DECIMAL(5, 2), nullable=False, server_default="0.00")
 
-    consigned_at = Column(
-        TIMESTAMP,
-        server_default=func.current_timestamp(),
-    )
+    payment_term = Column(ENUM("cash", "credit"), nullable=False, server_default="credit")
 
     status = Column(
         ENUM("pending", "confirmed", "completed", "cancelled"),
+        nullable=False,
         server_default="pending",
     )
 
-    supply = relationship("Supply", backref="consignments")
+    consigned_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
-    supplier = relationship(
-        "Party",
-        foreign_keys=[supplier_id],
-        backref="consignments_as_supplier",
-    )
-
-    agent = relationship(
-        "Party",
-        foreign_keys=[agent_id],
-        backref="consignments_as_agent",
-    )
+    supplier_supply = relationship("SupplierSupply", back_populates="consignments")
+    supplier = relationship("Supplier")
+    agent = relationship("CommissionAgent", back_populates="consignments")
+    sale_items = relationship("SaleItem", back_populates="consignment")
 
     def __repr__(self):
         return (
-            f"<Consignment consigned_id={self.consigned_id} "
+            f"<Consignment consignment_id={self.consignment_id} "
             f"status={self.status}>"
         )
