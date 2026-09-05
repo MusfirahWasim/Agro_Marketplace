@@ -9,20 +9,26 @@ ConsignmentStatus = Literal["pending", "confirmed", "completed", "cancelled"]
 
 class ConsignmentCreate(BaseModel):
     """
-    Created by the AGENT (AgentConsignmentIntake.jsx), not the supplier.
-    supplier_id/supplier_type are derived server-side from the selected
-    supply_id — never trusted from the client. agent_id/agent_type come
-    from the authenticated party.
+    Created by the AGENT (AgentConsignmentIntake.jsx). supplier_id is
+    derived server-side from the selected supplier_supply_id — never
+    trusted from the client. agent_id comes from the authenticated
+    agent, not v1's agent_id/agent_type pair (only one agent role now).
 
     Service-layer validation required: quantity_consigned must not
-    exceed the selected supply's current_stock, and current_stock must
-    be decremented by quantity_consigned on success.
+    exceed the selected supplier_supply's quantity_available, and
+    quantity_available must be decremented by quantity_consigned on
+    success (mirroring v1's current_stock decrement, now against
+    supplier_supplies instead of supply).
+
+    Quantities are Decimal(12,3) here, not int like v1 — v2's products
+    carry units (kg, ton, etc.) that support fractional quantities.
     """
-    supply_id: int
-    quantity_consigned: int = Field(..., gt=0)
+    supplier_supply_id: int
+    quantity_consigned: Decimal = Field(..., gt=0, decimal_places=3)
     selling_price_per_unit: Decimal = Field(..., gt=0)
     commission_rate: Optional[Decimal] = Field(
-        None, gt=0, lt=100, description="Leave blank to use the platform default rate"
+        None, gt=0, lt=100,
+        description="Leave blank to use the agent's own default commission_rate",
     )
     payment_term: PaymentTerm = "credit"
 
@@ -35,27 +41,29 @@ class ConsignmentStatusUpdate(BaseModel):
 class ConsignmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    consigned_id: int
-    supply_id: int
+    consignment_id: int
+    supplier_supply_id: int
     supplier_id: int
-    supplier_type: Literal["S"]
     agent_id: int
-    agent_type: Literal["CA"]
 
     payment_term: PaymentTerm
-    quantity_consigned: int
+    quantity_consigned: Decimal
     selling_price_per_unit: Decimal
-    commission_rate: Optional[Decimal] = None
-    quantity_sold: int
-    quantity_remaining: int
+    commission_rate: Decimal
+    quantity_sold: Decimal
 
     consigned_at: datetime
     status: ConsignmentStatus
 
-    # Populated by the service layer when the marketplace/detail views
-    # need denormalized display info (product name, agent name, etc.)
-    # rather than forcing the frontend to make N+1 lookups.
-    item_name: Optional[str] = None
+    # quantity_remaining is not a stored column in v2 (derive, don't
+    # store — same principle as balances in accounts/transactions) —
+    # computed by the service layer as quantity_consigned - quantity_sold
+    quantity_remaining: Optional[Decimal] = None
+
+    # Populated by the service layer when detail views need
+    # denormalized display info rather than forcing the frontend into
+    # N+1 lookups.
+    product_name: Optional[str] = None
     category: Optional[str] = None
     unit: Optional[str] = None
     supplier_name: Optional[str] = None

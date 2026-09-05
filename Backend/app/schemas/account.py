@@ -3,32 +3,42 @@ from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 
-PartyTypeForMoney = Literal["S", "B", "CA"]
-TransactionType = Literal["payment", "refund", "commission"]
-
 
 class AccountRead(BaseModel):
     """
-    The ledger is written internally by account_service.py (called from
-    payment_service.py and commission_service.py) — there is no
-    AccountCreate exposed here because nothing outside the backend
-    should be inserting ledger rows directly. This is read-only from
-    the API's perspective: AccountsLedger (admin, global) and per-party
-    statement views (SupplierPayments.jsx, AgentSettlements.jsx,
-    BuyerPayments.jsx) all just consume this.
+    accounts is a thin header row — one per buyer, supplier, OR agent
+    (exactly one of the three, enforced by a DB CHECK constraint),
+    holding just the opening_balance. Agent accounts exist so commission
+    payouts can be tracked through the same ledger as buyer/supplier
+    balances (see commission.py's payout_status, which relies on this).
+
+    The actual ledger activity lives in `transactions` (see
+    transaction.py); current_balance here is NOT a stored column —
+    it's opening_balance plus the net of that account's transactions,
+    computed by account_service.py, same derive-don't-store principle
+    already used for consignment.quantity_remaining.
+
+    No AccountCreate is exposed here — open question for
+    buyer_service.py / supplier_service.py / auth_service.py: is
+    opening_balance supplied at registration time (auto-creating this
+    row behind the scenes), or set via a separate step afterward? Needs
+    deciding before those services are built. For agents specifically,
+    account creation likely belongs in auth_service.py's signup flow
+    (alongside the users + commission_agents rows), not agent-triggered.
     """
     model_config = ConfigDict(from_attributes=True)
 
     account_id: int
-    party_id: int
-    party_type: PartyTypeForMoney
-    transaction_type: TransactionType
-    description: Optional[str] = None
-    debit_amount: Decimal
-    credit_amount: Decimal
-    running_balance: Decimal
-    payment_id: Optional[int] = None
-    order_id: Optional[int] = None
+    buyer_id: Optional[int] = None
+    supplier_id: Optional[int] = None
+    agent_id: Optional[int] = None
+    owner_type: Literal["buyer", "supplier", "agent"]
+    opening_balance: Decimal
     created_at: datetime
 
-    party_name: Optional[str] = None
+    # Computed, not stored.
+    current_balance: Optional[Decimal] = None
+
+    # Populated by the service layer for AgentLedger.jsx /
+    # AdminOutstandingBalances.jsx without extra frontend lookups.
+    owner_name: Optional[str] = None
