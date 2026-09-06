@@ -10,7 +10,6 @@ import {
   User,
   LogOut,
   Bell,
-  Menu,
   Truck,
   X,
   Boxes,
@@ -18,6 +17,7 @@ import {
   Landmark,
   Sparkles,
   Wallet,
+  FileText,
 } from "lucide-react";
 import { useLanguage } from "../i18n/LanguageContext";
 import LanguageSelector from "../i18n/LanguageSelector";
@@ -57,6 +57,14 @@ const NAV_CONFIG = {
       { to: "/agent/commissions", labelKey: "common.nav.commissions", icon: Percent },
       { to: "/agent/settlements", labelKey: "common.nav.settlements", icon: Landmark },
       { to: "/agent/price-recommendations", labelKey: "common.nav.priceInsights", icon: Sparkles },
+      { to: "/agent/buyers", labelKey: "common.nav.buyers", icon: User },
+      { to: "/agent/suppliers", labelKey: "common.nav.suppliers", icon: Truck },
+      { to: "/agent/consignment-intake", labelKey: "common.nav.consignments", icon: ClipboardList },
+      { to: "/agent/products", labelKey: "common.nav.products", icon: Sprout },
+      { to: "/agent/create-sale", labelKey: "common.nav.createSale", icon: ShoppingCart },
+      { to: "/agent/payments", labelKey: "common.nav.payments", icon: Wallet },
+      { to: "/agent/receipts", labelKey: "common.nav.receipts", icon: Wallet },
+      { to: "/agent/ledger", labelKey: "common.nav.ledger", icon: FileText },
     ],
   },
   buyer: {
@@ -119,15 +127,15 @@ export default function Layout({ role }) {
         />
       )}
 
-      {/* sidebar — fixed overlay, slides over content, does not resize the main column */}
+      {/* sidebar — fixed overlay, slides over content */}
       <aside
         className={`w-64 shrink-0 flex flex-col justify-between py-6 fixed inset-y-0 left-0 z-50 transition-transform duration-200 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{ backgroundColor: COLORS.forest }}
       >
-        <div>
-          <div className="flex items-center justify-between px-6 mb-10">
+        <div className="flex flex-col h-full min-h-0">
+          <div className="flex items-center justify-between px-6 mb-6 shrink-0">
             <div className="flex items-center gap-2">
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
@@ -142,12 +150,12 @@ export default function Layout({ role }) {
             </button>
           </div>
 
-          <nav className="flex flex-col gap-1 px-3">
+          <nav className="flex-1 overflow-y-auto flex flex-col gap-1 px-3">
             {config.links.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors shrink-0"
                 style={({ isActive }) =>
                   isActive
                     ? { backgroundColor: COLORS.gold, color: COLORS.forestDark, fontWeight: 500 }
@@ -161,7 +169,7 @@ export default function Layout({ role }) {
           </nav>
         </div>
 
-        <div className="px-3">
+        <div className="px-3 shrink-0 pt-4">
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm w-full"

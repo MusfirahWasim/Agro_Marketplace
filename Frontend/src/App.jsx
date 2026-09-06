@@ -15,8 +15,17 @@ import AgentOrders from "./agent/AgentOrders";
 import AgentInventory from "./agent/AgentInventory";
 import AgentCommissions from "./agent/AgentCommissions";
 import AgentSettlements from "./agent/AgentSettlements";
-import AgentConsignmentIntake from "./agent/AgentConsignmentIntake";
 import AgentPriceRecommendations from "./agent/AgentPriceRecommendations";
+// New pages added for the V2 agent-operated workflow — these are the ones
+// that were missing from the router, which is why navigating to them fell
+// through to the "*" catch-all below and bounced back to /login.
+import AgentBuyers from "./agent/AgentBuyers";
+import AgentSuppliers from "./agent/AgentSuppliers";
+import AgentProducts from "./agent/AgentProducts";
+import AgentCreateSale from "./agent/AgentCreateSale";
+import AgentPayments from "./agent/AgentPayments";
+import AgentReceipts from "./agent/AgentReceipts";
+import AgentLedger from "./agent/AgentLedger";
 
 import BuyerMarketplace from "./buyer/BuyerMarketplace";
 import BuyerProductDetail from "./buyer/BuyerProductDetail";
@@ -24,8 +33,6 @@ import BuyerCheckout from "./buyer/BuyerCheckout";
 import BuyerOrders from "./buyer/BuyerOrders";
 
 import SignupPage from "./common/SignupPage";
-
-
 
 export default function App() {
   return (
@@ -51,13 +58,20 @@ export default function App() {
         <Route path="/agent" element={<Layout role="agent" />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AgentDashboard />} />
-          <Route path="inventory" element={<AgentInventory />} />
           <Route path="orders" element={<AgentOrders />} />
           <Route path="profile" element={<ProfileSettings role="agent" />} />
+          <Route path="inventory" element={<AgentInventory />} />
           <Route path="commissions" element={<AgentCommissions />} />
           <Route path="settlements" element={<AgentSettlements />} />
-          <Route path="consignment-intake" element={<AgentConsignmentIntake />} />
           <Route path="price-recommendations" element={<AgentPriceRecommendations />} />
+          {/* New V2 pages */}
+          <Route path="buyers" element={<AgentBuyers />} />
+          <Route path="suppliers" element={<AgentSuppliers />} />
+          <Route path="products" element={<AgentProducts />} />
+          <Route path="create-sale" element={<AgentCreateSale />} />
+          <Route path="payments" element={<AgentPayments />} />
+          <Route path="receipts" element={<AgentReceipts />} />
+          <Route path="ledger" element={<AgentLedger />} />
         </Route>
 
         {/* Buyer area */}
