@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
+from app.models.commission_agent import CommissionAgent
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -61,3 +62,28 @@ def require_role(*allowed_roles: str):
 # routers instead of calling require_role(...) inline everywhere
 require_admin = require_role("ADMIN")
 require_agent = require_role("COMMISSION_AGENT")
+
+
+async def get_current_agent(
+    current_user: User = Depends(require_agent),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Resolves the authenticated user's CommissionAgent row — nearly
+    every agent-facing router needs agent_id (commission_agents.agent_id),
+    which is a different id than user_id. Deliberately does an explicit
+    query rather than accessing current_user.commission_agent directly —
+    that relationship is lazy-loaded, and touching it outside an active
+    async session context (e.g. after the request that loaded `User`
+    has moved on) raises MissingGreenlet under SQLAlchemy's async mode.
+    An explicit select here is always safe regardless of load state.
+    """
+    result = await db.execute(
+        select(CommissionAgent).where(CommissionAgent.user_id == current_user.user_id)
+    )
+    agent = result.scalar_one_or_none()
+    if agent is None:
+        # Shouldn't happen — every COMMISSION_AGENT user gets one at
+        # signup — but fail loudly rather than silently if it ever does.
+        raise HTTPException(status_code=500, detail="Agent profile not found for this user")
+    return agent

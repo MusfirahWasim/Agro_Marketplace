@@ -1,85 +1,70 @@
 from typing import List
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_party, require_agent, require_supplier
-from app.models.party import Party
+from app.core.dependencies import get_current_agent, get_current_user
+from app.models.commission_agent import CommissionAgent
+from app.models.user import User
 from app.schemas.consignment import ConsignmentCreate, ConsignmentStatusUpdate, ConsignmentRead
 from app.services import consignment_service
 
 router = APIRouter(prefix="/api/consignments", tags=["Consignments"])
 
 
-# NOTE: same route-ordering concern as supplies.py — /me, /supplier/me,
-# and /marketplace must come BEFORE /{consigned_id}.
-
-@router.post("/", response_model=ConsignmentRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ConsignmentRead, status_code=201)
 async def create_consignment(
     data: ConsignmentCreate,
-    agent: Party = Depends(require_agent),
+    agent: CommissionAgent = Depends(get_current_agent),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    AgentConsignmentIntake.jsx. supplier_id/supplier_type are derived
-    server-side (see consignment_service) from the selected supply —
-    never trusted from the request body.
+    AgentConsignmentIntake.jsx. Also posts a 'purchase' credit to the
+    supplier's account (see consignment_service.py) — created_by is
+    the authenticated user_id, distinct from agent.agent_id.
     """
-    return await consignment_service.create_consignment(db, agent, data)
+    return await consignment_service.create_consignment(
+        db, agent.agent_id, current_user.user_id, data
+    )
 
 
-@router.get("/me", response_model=List[ConsignmentRead])
-async def list_my_consignments(
-    agent: Party = Depends(require_agent),
+@router.get("", response_model=List[ConsignmentRead])
+async def list_consignments(
+    agent: CommissionAgent = Depends(get_current_agent),
     db: AsyncSession = Depends(get_db),
 ):
     """AgentInventory.jsx — everything this agent currently manages."""
-    return await consignment_service.list_consignments_for_agent(db, agent.party_id)
+    return await consignment_service.list_consignments_for_agent(db, agent.agent_id)
 
 
-@router.get("/supplier/me", response_model=List[ConsignmentRead])
-async def list_my_consignment_history(
-    supplier: Party = Depends(require_supplier),
+@router.get("/available", response_model=List[ConsignmentRead])
+async def list_available_consignments(
+    agent: CommissionAgent = Depends(get_current_agent),
     db: AsyncSession = Depends(get_db),
 ):
-    """SupplierConsignments.jsx — history of handovers to agents."""
-    return await consignment_service.list_consignments_for_supplier(db, supplier.party_id)
+    """AgentCreateSale.jsx — the consignment picker (confirmed status, stock remaining)."""
+    return await consignment_service.list_available_consignments_for_agent(db, agent.agent_id)
 
 
-@router.get("/marketplace", response_model=List[ConsignmentRead])
-async def browse_marketplace(
-    current_party: Party = Depends(get_current_party),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    BuyerMarketplace.jsx — only confirmed consignments with stock left
-    are shown. Open to any authenticated party, not just buyers, in
-    case agents/admins want to preview the live marketplace too.
-    """
-    return await consignment_service.list_marketplace_consignments(db)
-
-
-@router.get("/{consigned_id}", response_model=ConsignmentRead)
+@router.get("/{consignment_id}", response_model=ConsignmentRead)
 async def get_consignment(
-    consigned_id: int,
-    current_party: Party = Depends(get_current_party),
+    consignment_id: int,
     db: AsyncSession = Depends(get_db),
+    _agent: CommissionAgent = Depends(get_current_agent),
 ):
-    """BuyerProductDetail.jsx"""
-    return await consignment_service.get_consignment(db, consigned_id)
+    return await consignment_service.get_consignment(db, consignment_id)
 
 
-@router.patch("/{consigned_id}/status", response_model=ConsignmentRead)
+@router.patch("/{consignment_id}/status", response_model=ConsignmentRead)
 async def update_consignment_status(
-    consigned_id: int,
+    consignment_id: int,
     data: ConsignmentStatusUpdate,
-    agent: Party = Depends(require_agent),
+    agent: CommissionAgent = Depends(get_current_agent),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Ownership is checked inside consignment_service — raises 403 if
-    this isn't the agent's own consignment. Cancelling restores unsold
-    stock to the supplier; nothing sold moves consignments to
-    'completed' automatically elsewhere (see order_service).
+    Ownership is enforced inside consignment_service.update_status
+    itself (403 if this consignment isn't the caller's).
     """
-    return await consignment_service.update_status(db, consigned_id, agent, data)
+    return await consignment_service.update_status(db, consignment_id, agent.agent_id, data)

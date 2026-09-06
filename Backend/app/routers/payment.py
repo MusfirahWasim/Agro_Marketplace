@@ -1,59 +1,85 @@
 from typing import List
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_party, require_role
-from app.models.party import Party
+from app.core.dependencies import get_current_agent, get_current_user
+from app.models.commission_agent import CommissionAgent
+from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentRead
-from app.services import payment_service, order_service
+from app.services import payment_service, receipt_service
 
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
 
-# Admin doesn't make or receive payments in this system — only S/B/CA do
-require_payer = require_role("S", "B", "CA")
+
+async def _with_receipt_number(db: AsyncSession, payment):
+    """
+    receipt_number lives on Receipt, not Payment — every payment
+    guarantees one exists (payment_service.create_payment creates it in
+    the same transaction), so this is always resolvable.
+    """
+    receipt = await receipt_service.get_receipt_for_payment(db, payment.payment_id)
+    payment.receipt_number = receipt.receipt_number
+    return payment
 
 
-@router.post("/", response_model=PaymentRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PaymentRead, status_code=201)
 async def create_payment(
     data: PaymentCreate,
-    payer: Party = Depends(require_payer),
+    agent: CommissionAgent = Depends(get_current_agent),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Covers all three flows through one endpoint: buyer paying an agent,
-    agent settling a supplier, or a refund — payer is always whoever is
-    authenticated, never accepted from the request body.
+    AgentPayments.jsx — covers both buyer-pays-agent (FIFO-allocated
+    against oldest unpaid sales) and agent-pays-supplier (simple debit).
+    See payment_service.py for the full breakdown. A receipt is always
+    generated alongside this, in the same transaction.
+
+    NOTE: no ownership check that data.account_id belongs to one of
+    this agent's own buyers/suppliers — payment_service.create_payment
+    only rejects agent-owned accounts, it doesn't verify the account's
+    buyer/supplier belongs to the caller. Worth tightening, same class
+    of gap as commission.py's get_commission.
     """
-    return await payment_service.create_payment(db, payer, data)
+    payment = await payment_service.create_payment(db, agent.agent_id, current_user.user_id, data)
+    return await _with_receipt_number(db, payment)
 
 
-@router.get("/me", response_model=List[PaymentRead])
-async def list_my_payments(
-    current_party: Party = Depends(get_current_party),
+@router.get("", response_model=List[PaymentRead])
+async def list_payments(
+    agent: CommissionAgent = Depends(get_current_agent),
+    db: AsyncSession = Depends(get_db),
+):
+    """AgentPayments.jsx — every payment this agent has personally recorded."""
+    payments = await payment_service.list_payments_for_agent(db, agent.agent_id)
+    for payment in payments:
+        await _with_receipt_number(db, payment)
+    return payments
+
+
+@router.get("/account/{account_id}", response_model=List[PaymentRead])
+async def list_payments_for_account(
+    account_id: int,
+    _agent: CommissionAgent = Depends(get_current_agent),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Either side of a payment — powers SupplierPayments.jsx,
-    AgentSettlements.jsx, and BuyerPayments.jsx, each just hitting this
-    same endpoint as their own party.
+    AgentLedger.jsx — a given account's payment history. No explicit
+    ownership check here either (same class of gap noted above) —
+    account_id isn't verified against the caller's own buyers/suppliers.
     """
-    return await payment_service.list_payments_for_party(
-        db, current_party.party_id, current_party.party_type
-    )
+    payments = await payment_service.list_payments_for_account(db, account_id)
+    for payment in payments:
+        await _with_receipt_number(db, payment)
+    return payments
 
 
-@router.get("/order/{order_id}", response_model=List[PaymentRead])
-async def list_payments_for_order(
-    order_id: int,
-    current_party: Party = Depends(get_current_party),
+@router.get("/{payment_id}", response_model=PaymentRead)
+async def get_payment(
+    payment_id: int,
+    _agent: CommissionAgent = Depends(get_current_agent),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    All payments tied to a specific order — e.g. a partial payment plus
-    a later refund would both show up here. Only the buyer who placed
-    it, the agent who owns its consignment, or an admin can view this.
-    """
-    order = await order_service.get_order(db, order_id)
-    await order_service.verify_order_access(db, order, current_party)
-    return await payment_service.list_payments_for_order(db, order_id)
+    payment = await payment_service.get_payment(db, payment_id)
+    return await _with_receipt_number(db, payment)
